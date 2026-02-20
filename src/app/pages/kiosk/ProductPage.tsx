@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShoppingBag, X, Plus, Minus, ChevronRight, LogOut, ShoppingCart } from 'lucide-react';
-import logo from 'figma:asset/c35d81f584a09df9348d8ddde3e202e99fefbfbb.png';
+import logo from '@/assets/c35d81f584a09df9348d8ddde3e202e99fefbfbb.png';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';

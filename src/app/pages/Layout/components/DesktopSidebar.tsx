@@ -3,7 +3,7 @@ import { LogOut } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { motion } from 'motion/react';
 import type { AuthUser } from '../../../lib/auth';
-import logo from 'figma:asset/c35d81f584a09df9348d8ddde3e202e99fefbfbb.png';
+import logo from '@/assets/c35d81f584a09df9348d8ddde3e202e99fefbfbb.png';
 
 interface DesktopSidebarProps {
   user: AuthUser;

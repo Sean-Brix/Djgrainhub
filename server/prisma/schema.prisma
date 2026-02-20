@@ -1,0 +1,215 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// USER
+// Handles login, role-based access control,
+// profile settings, and password management.
+// accessRole: "super_admin" sees all machines;
+//             "admin" sees only ownedMachineId.
+// ─────────────────────────────────────────────
+model User {
+  id                 String                  @id @default(cuid())
+  name               String
+  email              String                  @unique
+  username           String                  @unique
+  password           String                  // bcrypt hash in production
+  role               String                  // display label e.g. "Business Owner"
+  accessRole         String                  // "super_admin" | "admin"
+  status             String                  @default("active") // "active" | "inactive"
+  ownedMachineId     String?                 // FK-like reference; null = owns all (super_admin)
+  machines           Machine[]               @relation("owner")
+  notificationPrefs  NotificationPreference?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// MACHINE
+// Physical vending unit. Displayed on list,
+// map, and detail views. Tracks live status,
+// stock level, and cumulative earnings.
+// ─────────────────────────────────────────────
+model Machine {
+  id            String         @id @default(cuid())
+  name          String
+  location      String
+  lat           Float?
+  lng           Float?
+  ownerId       String
+  owner         User           @relation("owner", fields: [ownerId], references: [id])
+  status        String         @default("offline") // "online" | "warning" | "offline"
+  capacity      Int            @default(100)       // theoretical max pieces across all slots
+  lastRefill    DateTime?
+  earnings      Float          @default(0)         // running total (updated on each sale)
+  alertCount    Int            @default(0)         // denormalized active alert count
+  products      Product[]
+  sales         Sale[]
+  alerts        Alert[]
+  reports       Report[]
+  events        MachineEvent[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// PRODUCT
+// One record per slot per machine.
+// Tracks selling price, cost (for profit calc),
+// weight (for kg metrics), and current stock.
+// ─────────────────────────────────────────────
+model Product {
+  id         String     @id @default(cuid())
+  machineId  String
+  machine    Machine    @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  slotNumber Int                       // 1–6
+  name       String                    // e.g. "Premium Jasmine"
+  price      Float                     // selling price per unit (PHP)
+  cost       Float                     // purchase cost per unit (PHP) – used for profit margin
+  weight     Float                     // kg per unit – used for stock-in-kg metric
+  stock      Int        @default(0)    // current units in machine
+  imageUrl   String?    @db.Text
+  saleItems  SaleItem[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@unique([machineId, slotNumber])    // one product per slot
+}
+
+// ─────────────────────────────────────────────
+// SALE
+// A completed or failed kiosk transaction.
+// paymentMethod captured at checkout (GCash/QR PH).
+// ─────────────────────────────────────────────
+model Sale {
+  id            String     @id @default(cuid())
+  machineId     String
+  machine       Machine    @relation(fields: [machineId], references: [id])
+  items         SaleItem[]
+  totalPrice    Float
+  paymentMethod String     @default("GCash") // "GCash" | "QR PH" | "Cash"
+  timestamp     DateTime   @default(now())
+  status        String     @default("completed") // "completed" | "failed"
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// SALE ITEM
+// Line item within a Sale.
+// unitPrice is snapshotted at time of sale so
+// historical revenue stays accurate after price changes.
+// ─────────────────────────────────────────────
+model SaleItem {
+  id        String  @id @default(cuid())
+  saleId    String
+  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Float
+  unitPrice Float   // snapshot of Product.price at time of sale
+  subtotal  Float   // unitPrice × quantity
+}
+
+// ─────────────────────────────────────────────
+// ALERT
+// System-generated machine alerts (stock, connection,
+// maintenance). Displayed on Dashboard and Machine detail.
+// severity: critical > high > medium > low
+// ─────────────────────────────────────────────
+model Alert {
+  id        String   @id @default(cuid())
+  machineId String
+  machine   Machine  @relation(fields: [machineId], references: [id])
+  type      String   // "stock" | "connection" | "maintenance"
+  severity  String   // "critical" | "high" | "medium" | "low"
+  message   String   @db.Text
+  timestamp DateTime @default(now())
+  status    String   @default("active") // "active" | "resolved"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// REPORT
+// User-submitted issue reports, submitted from
+// the kiosk or admin panel. Feeds into the
+// Support & Operations page.
+// ─────────────────────────────────────────────
+model Report {
+  id             String    @id @default(cuid())
+  machineId      String
+  machine        Machine   @relation(fields: [machineId], references: [id])
+  category       String    // "Machine Jam" | "Payment Issue" | "Product Quality" | "Display Problem" | "Other"
+  message        String    @db.Text
+  reporterName   String?   // optional – anonymous allowed
+  reporterMobile String?
+  timestamp      DateTime  @default(now())
+  status         String    @default("open") // "open" | "resolved"
+  todoItem       TodoItem?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// TODO ITEM
+// Maintenance task created from a Report.
+// One-to-one with Report (can only add once).
+// Tracked on the To-Do List tab under Reports.
+// ─────────────────────────────────────────────
+model TodoItem {
+  id          String   @id @default(cuid())
+  reportId    String   @unique
+  report      Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  machineId   String
+  title       String
+  description String   @db.Text
+  category    String
+  completed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATION PREFERENCE
+// One record per user. Controls which push/email
+// notifications they receive (Settings page).
+// ─────────────────────────────────────────────
+model NotificationPreference {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  machineAlerts Boolean  @default(true)  // machine offline / error alerts
+  stockAlerts   Boolean  @default(true)  // stock drops below 20%
+  dailySummary  Boolean  @default(false) // daily email summary of sales
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// MACHINE EVENT
+// Persistent log of real-time MQTT telemetry.
+// Powers the Live Monitor feed and future
+// analytics (heartbeats, sensor readings, etc.).
+// type: "sale" | "status" | "heartbeat" | "sensor"
+// ─────────────────────────────────────────────
+model MachineEvent {
+  id        String   @id @default(cuid())
+  machineId String
+  machine   Machine  @relation(fields: [machineId], references: [id])
+  type      String   // "sale" | "status" | "heartbeat" | "sensor" | "alert"
+  topic     String   // MQTT topic the event arrived on
+  payload   Json     // raw MQTT payload stored as JSON
+  timestamp DateTime @default(now())
+
+  @@index([machineId, timestamp])  // fast time-range queries per machine
+}

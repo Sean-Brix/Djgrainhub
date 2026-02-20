@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Hand, Settings, Lock, User, X, ShieldAlert, Eye, EyeOff, MessageSquareWarning, Send, CheckCircle2, ChevronDown } from 'lucide-react';
-import logo from 'figma:asset/c35d81f584a09df9348d8ddde3e202e99fefbfbb.png';
+import logo from '@/assets/c35d81f584a09df9348d8ddde3e202e99fefbfbb.png';
 import { validateCredentials } from '@/app/lib/auth';
 import { useData } from '@/app/lib/DataContext';
 
@@ -71,7 +71,7 @@ export function IdlePage({ onStart, onAdminExit, machineId }: IdlePageProps) {
     // Small delay for UX
     await new Promise(r => setTimeout(r, 800));
 
-    const user = validateCredentials(adminUsername, adminPassword);
+    const user = await validateCredentials(adminUsername, adminPassword);
     if (user) {
       setShowAdminModal(false);
       setAdminLoading(false);

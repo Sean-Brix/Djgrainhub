@@ -1,20 +1,24 @@
 /**
  * DataContext for DJ Grain Hub
  *
- * Centralizes ALL mutable in-memory data into a single React context.
- * Every page reads from and writes to this store, so changes are
- * visible across all pages instantly (within the same session).
+ * API-backed data store. Fetches from the Express backend when the
+ * user is authenticated and re-fetches whenever the user changes
+ * (login / logout). All JSON db/ file imports have been removed.
  *
- * Initializes from the JSON database files on mount.
+ * The context interface is intentionally unchanged so no page-level
+ * component needs to be modified.
  */
 
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import machinesData from '../../db/machines.json';
-import productsData from '../../db/products.json';
-import salesData from '../../db/sales.json';
-import alertsData from '../../db/alerts.json';
-import usersData from '../../db/users.json';
-import reportsData from '../../db/reports.json';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+} from 'react';
+import { api } from './api';
+import { useAuth } from './AuthContext';
 import type { AuthUser } from './auth';
 import type {
   Machine,
@@ -26,26 +30,91 @@ import type {
   Report,
 } from './dataHelpers';
 
-// ─── Raw sale type (matches JSON format) ─────────────────────────────
-interface RawSale {
-  id: string;
-  machineId: string;
-  items: [string, number, number][];
-  totalPrice: number;
-  timestamp: string;
-  status: 'completed' | 'failed';
+// ─── API → frontend type mappers ──────────────────────────────────────
+
+function mapProduct(p: any): Product {
+  return {
+    id: p.id,
+    machineId: p.machineId,
+    slotNumber: p.slotNumber,
+    name: p.name,
+    price: Number(p.price),
+    cost: Number(p.cost),
+    weight: Number(p.weight),
+    stock: p.stock,
+    imageUrl: p.imageUrl || '',
+  };
 }
 
-// ─── Convert raw sales to UI format ──────────────────────────────────
-function convertRawSales(raw: RawSale[]): Sale[] {
-  return raw.map(sale => ({
-    ...sale,
-    items: sale.items.map(([productId, quantity, lineTotal]) => ({
-      productId,
-      quantity,
-      price: quantity > 0 ? lineTotal / quantity : 0,
+function mapMachine(m: any): Machine {
+  return {
+    id: m.id,
+    name: m.name,
+    location: m.location,
+    lat: m.lat ?? undefined,
+    lng: m.lng ?? undefined,
+    ownerId: m.ownerId,
+    status: m.status as Machine['status'],
+    capacity: m.capacity,
+    lastRefill: m.lastRefill ? new Date(m.lastRefill).toISOString() : '',
+    earnings: Number(m.earnings),
+    alerts: m.alertCount ?? m._count?.alerts ?? 0,
+    products: m.products?.map(mapProduct),
+  };
+}
+
+function mapSale(s: any): Sale {
+  return {
+    id: s.id,
+    machineId: s.machineId,
+    items: (s.items || []).map((item: any): SaleItem => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      price: Number(item.unitPrice ?? item.price ?? 0),
     })),
-  }));
+    totalPrice: Number(s.totalPrice),
+    timestamp: s.timestamp ? new Date(s.timestamp).toISOString() : new Date().toISOString(),
+    status: s.status as Sale['status'],
+  };
+}
+
+function mapAlert(a: any): Alert {
+  return {
+    id: a.id,
+    machineId: a.machineId,
+    type: a.type,
+    severity: a.severity as Alert['severity'],
+    message: a.message,
+    timestamp: a.timestamp ? new Date(a.timestamp).toISOString() : new Date().toISOString(),
+    status: a.status as Alert['status'],
+  };
+}
+
+function mapUser(u: any): UserRecord {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    username: u.username,
+    password: '', // never returned by API
+    role: u.role,
+    accessRole: u.accessRole as UserRecord['accessRole'],
+    status: u.status,
+    ownedMachineId: u.ownedMachineId || '',
+  };
+}
+
+function mapReport(r: any): Report {
+  return {
+    id: r.id,
+    machineId: r.machineId,
+    category: r.category,
+    message: r.message,
+    name: r.name ?? undefined,
+    mobileNumber: r.mobileNumber ?? undefined,
+    timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
+    status: r.status as Report['status'],
+  };
 }
 
 // ─── Context Types ───────────────────────────────────────────────────
@@ -58,6 +127,9 @@ interface DataContextType {
   alerts: Alert[];
   users: UserRecord[];
   reports: Report[];
+
+  // ── Loading state ──
+  isLoading: boolean;
 
   // ── Enriched machines (products joined) ──
   enrichedMachines: Machine[];
@@ -100,6 +172,9 @@ interface DataContextType {
 
   // ── Stock management ──
   decrementStock: (productId: string, quantity: number) => void;
+
+  // ── Manual refresh ──
+  refreshData: () => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -113,12 +188,65 @@ function getVisibleMachineIds(user: AuthUser): string[] | null {
 // ─── Provider ────────────────────────────────────────────────────────
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
-  const [machines, setMachines] = useState<Machine[]>(() => machinesData as Machine[]);
-  const [products, setProducts] = useState<Product[]>(() => productsData as Product[]);
-  const [sales, setSales] = useState<Sale[]>(() => convertRawSales(salesData as RawSale[]));
-  const [alerts, setAlerts] = useState<Alert[]>(() => alertsData as Alert[]);
-  const [users, setUsers] = useState<UserRecord[]>(() => usersData as UserRecord[]);
-  const [reports, setReports] = useState<Report[]>(() => reportsData as Report[]);
+  const { user } = useAuth();
+  const [machines, setMachines] = useState<Machine[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  // ── Load all data from API ──
+  const loadAllData = useCallback(async (currentUser: typeof user) => {
+    if (!currentUser) return;
+    setIsLoading(true);
+    try {
+      const [machinesRaw, salesRaw, alertsRaw, reportsRaw] = await Promise.all([
+        api.get<any[]>('/machines'),
+        api.get<{ sales: any[] }>('/sales?limit=500'),
+        api.get<any[]>('/alerts'),
+        api.get<any[]>('/reports'),
+      ]);
+
+      setMachines(machinesRaw.map(mapMachine));
+      // Extract flat products from embedded machine products
+      setProducts(machinesRaw.flatMap((m: any) => (m.products || []).map(mapProduct)));
+      setSales((salesRaw.sales || []).map(mapSale));
+      setAlerts(alertsRaw.map(mapAlert));
+      setReports(reportsRaw.map(mapReport));
+
+      // Users only visible to super_admin
+      if (currentUser.accessRole === 'super_admin') {
+        const usersRaw = await api.get<any[]>('/users');
+        setUsers(usersRaw.map(mapUser));
+      } else {
+        setUsers([]);
+      }
+    } catch (err) {
+      console.error('[DataContext] Failed to load data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // ── Reload when auth user changes (login / logout) ──
+  useEffect(() => {
+    if (user) {
+      loadAllData(user);
+    } else {
+      setMachines([]);
+      setProducts([]);
+      setSales([]);
+      setAlerts([]);
+      setUsers([]);
+      setReports([]);
+    }
+  }, [user, loadAllData]);
+
+  const refreshData = useCallback(() => {
+    if (user) loadAllData(user);
+  }, [user, loadAllData]);
 
   // ── Enriched machines: join products ──
   const enrichedMachines = useMemo(
@@ -134,8 +262,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // ── Filtered getters ──
   const getMachinesForUserFn = useCallback(
-    (user: AuthUser): Machine[] => {
-      const ids = getVisibleMachineIds(user);
+    (authUser: AuthUser): Machine[] => {
+      const ids = getVisibleMachineIds(authUser);
       if (ids === null) return enrichedMachines;
       return enrichedMachines.filter(m => ids.includes(m.id));
     },
@@ -149,8 +277,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   );
 
   const getSalesForUserFn = useCallback(
-    (user: AuthUser): Sale[] => {
-      const ids = getVisibleMachineIds(user);
+    (authUser: AuthUser): Sale[] => {
+      const ids = getVisibleMachineIds(authUser);
       if (ids === null) return sales;
       return sales.filter(s => ids.includes(s.machineId));
     },
@@ -158,8 +286,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   );
 
   const getAlertsForUserFn = useCallback(
-    (user: AuthUser): Alert[] => {
-      const ids = getVisibleMachineIds(user);
+    (authUser: AuthUser): Alert[] => {
+      const ids = getVisibleMachineIds(authUser);
       if (ids === null) return alerts;
       return alerts.filter(a => ids.includes(a.machineId));
     },
@@ -167,8 +295,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   );
 
   const getReportsForUserFn = useCallback(
-    (user: AuthUser): Report[] => {
-      const ids = getVisibleMachineIds(user);
+    (authUser: AuthUser): Report[] => {
+      const ids = getVisibleMachineIds(authUser);
       if (ids === null) return reports;
       return reports.filter(r => ids.includes(r.machineId));
     },
@@ -194,65 +322,120 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // ── Machine CRUD ──
   const addMachine = useCallback((machine: Machine) => {
-    setMachines(prev => [...prev, machine]);
+    const { name, location, lat, lng, ownerId, status, capacity, lastRefill } = machine;
+    api.post<any>('/machines', { name, location, lat, lng, ownerId, status, capacity, lastRefill })
+      .then(created => setMachines(prev => [...prev, mapMachine(created)]))
+      .catch(err => console.error('[DataContext] addMachine:', err));
   }, []);
 
   const updateMachine = useCallback((id: string, updates: Partial<Machine>) => {
+    // Optimistic local update for immediate UI response
     setMachines(prev => prev.map(m => (m.id === id ? { ...m, ...updates } : m)));
+    api.patch<any>(`/machines/${id}`, updates)
+      .then(updated => setMachines(prev => prev.map(m => (m.id === id ? mapMachine(updated) : m))))
+      .catch(err => console.error('[DataContext] updateMachine:', err));
   }, []);
 
   const deleteMachine = useCallback((id: string) => {
     setMachines(prev => prev.filter(m => m.id !== id));
-    // Also remove associated products
     setProducts(prev => prev.filter(p => p.machineId !== id));
+    api.delete<any>(`/machines/${id}`)
+      .catch(err => console.error('[DataContext] deleteMachine:', err));
   }, []);
 
   // ── Product CRUD ──
   const addProduct = useCallback((product: Product) => {
-    setProducts(prev => [...prev, product]);
+    const { machineId, slotNumber, name, price, cost, weight, stock, imageUrl } = product;
+    api.post<any>(`/machines/${machineId}/products`, { slotNumber, name, price, cost, weight, stock, imageUrl })
+      .then(created => setProducts(prev => [...prev, mapProduct(created)]))
+      .catch(err => console.error('[DataContext] addProduct:', err));
   }, []);
 
   const updateProduct = useCallback((id: string, updates: Partial<Product>) => {
     setProducts(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));
+    api.patch<any>(`/products/${id}`, updates)
+      .then(updated => setProducts(prev => prev.map(p => (p.id === id ? mapProduct(updated) : p))))
+      .catch(err => console.error('[DataContext] updateProduct:', err));
   }, []);
 
   const deleteProduct = useCallback((id: string) => {
     setProducts(prev => prev.filter(p => p.id !== id));
+    api.delete<any>(`/products/${id}`)
+      .catch(err => console.error('[DataContext] deleteProduct:', err));
   }, []);
 
   // ── Report mutations ──
   const addReport = useCallback((report: Report) => {
-    setReports(prev => [report, ...prev]);
+    const { machineId, category, message, name: reporterName, mobileNumber } = report;
+    api.post<any>('/reports', { machineId, category, message, name: reporterName, mobileNumber })
+      .then(created => setReports(prev => [mapReport(created), ...prev]))
+      .catch(err => console.error('[DataContext] addReport:', err));
   }, []);
 
   const updateReportStatus = useCallback((id: string, status: Report['status']) => {
     setReports(prev => prev.map(r => (r.id === id ? { ...r, status } : r)));
+    api.patch<any>(`/reports/${id}/status`, { status })
+      .catch(err => console.error('[DataContext] updateReportStatus:', err));
   }, []);
 
   // ── Alert mutations ──
   const updateAlertStatus = useCallback((id: string, status: Alert['status']) => {
     setAlerts(prev => prev.map(a => (a.id === id ? { ...a, status } : a)));
+    api.patch<any>(`/alerts/${id}`, { status })
+      .catch(err => console.error('[DataContext] updateAlertStatus:', err));
   }, []);
 
   // ── Sale mutations ──
+  // POST /api/sales handles stock decrement + earnings increment atomically.
+  // The kiosk's separate decrementStock / updateMachine(earnings) calls are
+  // local-only optimistic updates; the DB is always authoritative.
   const addSale = useCallback((sale: Sale) => {
-    setSales(prev => [...prev, sale]);
+    const body = {
+      machineId: sale.machineId,
+      items: sale.items.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: item.price,
+      })),
+    };
+    api.post<any>('/sales', body)
+      .then(created => {
+        setSales(prev => [mapSale(created), ...prev]);
+        // Re-fetch machines to get DB-accurate stock + earnings
+        api.get<any[]>('/machines')
+          .then(raw => {
+            setMachines(raw.map(mapMachine));
+            setProducts(raw.flatMap((m: any) => (m.products || []).map(mapProduct)));
+          })
+          .catch(() => { /* non-critical */ });
+      })
+      .catch(err => console.error('[DataContext] addSale:', err));
   }, []);
 
   // ── User CRUD ──
-  const addUser = useCallback((user: UserRecord) => {
-    setUsers(prev => [...prev, user]);
+  const addUser = useCallback((userRecord: UserRecord) => {
+    const { name, email, username, password, role, accessRole, status: userStatus, ownedMachineId } = userRecord;
+    api.post<any>('/users', { name, email, username, password, role, accessRole, status: userStatus, ownedMachineId })
+      .then(created => setUsers(prev => [...prev, mapUser(created)]))
+      .catch(err => console.error('[DataContext] addUser:', err));
   }, []);
 
   const updateUser = useCallback((id: string, updates: Partial<UserRecord>) => {
     setUsers(prev => prev.map(u => (u.id === id ? { ...u, ...updates } : u)));
+    api.patch<any>(`/users/${id}`, updates)
+      .then(updated => setUsers(prev => prev.map(u => (u.id === id ? mapUser(updated) : u))))
+      .catch(err => console.error('[DataContext] updateUser:', err));
   }, []);
 
   const deleteUser = useCallback((id: string) => {
     setUsers(prev => prev.filter(u => u.id !== id));
+    api.delete<any>(`/users/${id}`)
+      .catch(err => console.error('[DataContext] deleteUser:', err));
   }, []);
 
-  // ── Stock management ──
+  // ── Stock management (local-only optimistic update) ──
+  // The sale API already decrements stock in the DB; this syncs the UI
+  // immediately until the next machines refresh triggered by addSale.
   const decrementStock = useCallback((productId: string, quantity: number) => {
     setProducts(prev =>
       prev.map(p =>
@@ -269,6 +452,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       alerts,
       users,
       reports,
+      isLoading,
       enrichedMachines,
       getMachinesForUser: getMachinesForUserFn,
       getProductsForMachine: getProductsForMachineFn,
@@ -291,15 +475,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       updateUser,
       deleteUser,
       decrementStock,
+      refreshData,
     }),
     [
-      machines, products, sales, alerts, users, reports, enrichedMachines,
+      machines, products, sales, alerts, users, reports, isLoading, enrichedMachines,
       getMachinesForUserFn, getProductsForMachineFn, getSalesForUserFn,
       getAlertsForUserFn, getReportsForUserFn, getMachineNameFn, getProductNameFn,
       addMachine, updateMachine, deleteMachine,
       addProduct, updateProduct, deleteProduct,
       addReport, updateReportStatus, updateAlertStatus,
-      addSale, addUser, updateUser, deleteUser, decrementStock,
+      addSale, addUser, updateUser, deleteUser, decrementStock, refreshData,
     ]
   );
 
@@ -319,6 +504,7 @@ const FALLBACK: DataContextType = {
   alerts: emptyArr,
   users: emptyArr,
   reports: emptyArr,
+  isLoading: false,
   enrichedMachines: emptyArr,
   getMachinesForUser: () => emptyArr,
   getProductsForMachine: () => emptyArr,
@@ -341,6 +527,7 @@ const FALLBACK: DataContextType = {
   updateUser: noopVoid,
   deleteUser: noopVoid,
   decrementStock: noopVoid,
+  refreshData: noopVoid,
 };
 
 export function useData(): DataContextType {
