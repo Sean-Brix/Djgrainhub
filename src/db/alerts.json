@@ -1,0 +1,38 @@
+[
+  {
+    "id": "a1",
+    "machineId": "m2",
+    "type": "stock",
+    "severity": "high",
+    "message": "Low stock alert — all hoppers below 20%",
+    "timestamp": "2023-10-26T08:00:00Z",
+    "status": "active"
+  },
+  {
+    "id": "a2",
+    "machineId": "m3",
+    "type": "connection",
+    "severity": "critical",
+    "message": "Connection lost for > 1 hour",
+    "timestamp": "2023-10-25T18:00:00Z",
+    "status": "active"
+  },
+  {
+    "id": "a3",
+    "machineId": "m3",
+    "type": "maintenance",
+    "severity": "medium",
+    "message": "Coin dispenser jam detected",
+    "timestamp": "2023-10-25T17:45:00Z",
+    "status": "resolved"
+  },
+  {
+    "id": "a4",
+    "machineId": "m6",
+    "type": "stock",
+    "severity": "high",
+    "message": "Organic Brown hopper nearly empty (3 kg remaining)",
+    "timestamp": "2023-10-26T14:00:00Z",
+    "status": "active"
+  }
+]
