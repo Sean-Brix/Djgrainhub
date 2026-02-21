@@ -261,7 +261,7 @@ export function DevMqtt() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="p-6 md:p-8 max-w-4xl mx-auto space-y-6"
+      className="p-4 md:p-8 max-w-4xl mx-auto space-y-4 md:space-y-6"
     >
       {/* Header */}
       <motion.div variants={itemVariants} className="flex items-center gap-3">
@@ -285,12 +285,12 @@ export function DevMqtt() {
       </motion.div>
 
       {/* Tabs */}
-      <motion.div variants={itemVariants} className="bg-muted p-1 rounded-lg flex gap-1 w-fit">
+      <motion.div variants={itemVariants} className="bg-muted p-1 rounded-xl grid grid-cols-2 md:flex gap-1">
         {tabs.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all cursor-pointer ${
+            className={`px-3 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all cursor-pointer text-center ${
               tab === t.id
                 ? 'bg-background shadow-sm text-foreground'
                 : 'text-muted-foreground hover:text-foreground'
@@ -332,7 +332,7 @@ export function DevMqtt() {
                       placeholder="custom/topic"
                       value={['order', 'dispense'].includes(pubTopic) ? '' : pubTopic}
                       onChange={e => setPubTopic(e.target.value)}
-                      className="h-8 text-xs w-40"
+                      className="h-8 text-xs w-full sm:w-40"
                     />
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-1">
@@ -461,12 +461,13 @@ export function DevMqtt() {
           <motion.div variants={itemVariants}>
             <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <ArrowDownCircle size={16} className="text-blue-500" />
-                    Order Inbox — what the ESP32 receives on <code className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 font-mono">order</code>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <CardTitle className="text-sm md:text-base flex flex-wrap items-center gap-1.5">
+                    <ArrowDownCircle size={16} className="text-blue-500 shrink-0" />
+                    <span>Order Inbox — ESP32 view on</span>
+                    <code className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 font-mono">order</code>
                   </CardTitle>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={fetchOrderMessages}
                       title="Refresh once"
@@ -531,7 +532,7 @@ export function DevMqtt() {
                           </div>
 
                           {/* Slot grid — visual ESP32 view */}
-                          <div className="grid grid-cols-6 gap-2">
+                          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                             {slots.map(({ key, n, qty }) => (
                               <div
                                 key={key}
@@ -584,12 +585,12 @@ export function DevMqtt() {
           <motion.div variants={itemVariants}>
             <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle className="text-base flex items-center gap-2">
                     <ArrowDownCircle size={16} className="text-violet-500" />
                     Live Message Monitor
                   </CardTitle>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={fetchMessages}
                       title="Refresh once"

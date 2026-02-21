@@ -156,7 +156,6 @@ function PaymentLinksTab() {
         <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
           <CardHeader className="p-5 pb-0">
             <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Create Payment Link</CardTitle>
-            <p className="text-xs text-slate-400 mt-1">Generates a one-time checkout URL. The customer visits it and pays via their preferred method.</p>
           </CardHeader>
           <CardContent className="p-5 space-y-4">
             <div>
@@ -377,7 +376,6 @@ function PaymentIntentsTab() {
         <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
           <CardHeader className="p-5 pb-0">
             <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Step 1 — Create Intent</CardTitle>
-            <p className="text-xs text-slate-400 mt-1">Reserves the amount. You then attach a payment method to complete the charge.</p>
           </CardHeader>
           <CardContent className="p-5 space-y-4">
             <div>
@@ -415,7 +413,6 @@ function PaymentIntentsTab() {
           <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
             <CardHeader className="p-5 pb-0">
               <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Step 2 — Attach Payment Method</CardTitle>
-              <p className="text-xs text-slate-400 mt-1">Creates a wallet method and attaches it to the intent. Wallet methods return a redirect URL.</p>
             </CardHeader>
             <CardContent className="p-5 space-y-4">
               <div>
@@ -591,7 +588,6 @@ function QRPhTab() {
         <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
           <CardHeader className="p-5 pb-0">
             <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Generate QR Ph Code</CardTitle>
-            <p className="text-xs text-slate-400 mt-1">Creates a QR Ph code the customer scans with GCash, Maya, or any banking app to pay instantly.</p>
           </CardHeader>
           <CardContent className="p-5 space-y-4">
             <div>
@@ -646,7 +642,6 @@ function QRPhTab() {
           <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
             <CardHeader className="p-5 pb-0">
               <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Scan to Pay</CardTitle>
-              <p className="text-xs text-slate-400 mt-1">Open GCash, Maya, or any QR Ph‑enabled banking app and scan this code</p>
             </CardHeader>
             <CardContent className="p-5 flex flex-col items-center gap-4">
               <div className="bg-white rounded-2xl p-6 border border-slate-100 w-full flex items-center justify-center">
@@ -841,94 +836,24 @@ export function DevPayMongo() {
       initial="hidden"
       animate="show"
       variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.08 } } }}
-      className="space-y-8 pb-20 md:pb-6"
+      className="space-y-4 md:space-y-6 pb-20 md:pb-6"
     >
       {/* Header */}
       <motion.div variants={itemVariants}>
-        <div className="flex items-center gap-2.5 mb-1">
-          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">PayMongo</h2>
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">PayMongo</h2>
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-600 border border-amber-200">
             <FlaskConical size={11} />SANDBOX
           </span>
         </div>
-        <p className="text-sm font-medium text-slate-500">Test payment links, intents, QR Ph codes, and webhook events before going live</p>
-      </motion.div>
-
-      {/* Stats row */}
-      <motion.div variants={itemVariants} className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="group border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 overflow-hidden relative">
-          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform duration-300">
-            <Link2 size={48} className="text-primary" />
-          </div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-5">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Payment Links</CardTitle>
-          </CardHeader>
-          <CardContent className="p-5 pt-0">
-            <div className="text-2xl font-black text-slate-900 tracking-tighter">One-Time</div>
-            <p className="text-xs font-bold text-primary mt-2 flex items-center bg-primary/5 w-fit px-2 py-0.5 rounded-full">Easiest Integration</p>
-          </CardContent>
-        </Card>
-        <Card className="group border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 overflow-hidden relative">
-          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform duration-300">
-            <CreditCard size={48} className="text-blue-600" />
-          </div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-5">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Payment Intents</CardTitle>
-          </CardHeader>
-          <CardContent className="p-5 pt-0">
-            <div className="text-2xl font-black text-slate-900 tracking-tighter">Programmable</div>
-            <p className="text-xs font-bold text-blue-600 mt-2 flex items-center bg-blue-50 w-fit px-2 py-0.5 rounded-full">GCash · Maya · Card</p>
-          </CardContent>
-        </Card>
-        <Card className="group border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 overflow-hidden relative">
-          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform duration-300">
-            <QrCode size={48} className="text-emerald-600" />
-          </div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-5">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">QR Ph</CardTitle>
-          </CardHeader>
-          <CardContent className="p-5 pt-0">
-            <div className="text-2xl font-black text-slate-900 tracking-tighter">Scan & Pay</div>
-            <p className="text-xs font-bold text-emerald-600 mt-2 flex items-center bg-emerald-50 w-fit px-2 py-0.5 rounded-full">GCash · Maya · Bank</p>
-          </CardContent>
-        </Card>
-        <Card className="group border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 overflow-hidden relative">
-          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform duration-300">
-            <Webhook size={48} className="text-violet-600" />
-          </div>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-5">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Webhooks</CardTitle>
-          </CardHeader>
-          <CardContent className="p-5 pt-0">
-            <div className="text-2xl font-black text-slate-900 tracking-tighter">Real-time</div>
-            <p className="text-xs font-bold text-violet-600 mt-2 flex items-center bg-violet-50 w-fit px-2 py-0.5 rounded-full">Event-driven</p>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Test credentials */}
-      <motion.div variants={itemVariants} className="grid gap-4 sm:grid-cols-3">
-        {[
-          { title: 'Test Card (Visa)', detail: '4343 4343 4343 4345', note: 'Exp: any future · CVV: any 3 digits' },
-          { title: 'GCash Sandbox',   detail: 'Redirect flow',       note: 'Use the redirect URL after attaching method' },
-          { title: 'QR Ph',           detail: 'Scan with GCash/Maya', note: 'Generate a QR code and scan it in any banking app' },
-        ].map(item => (
-          <Card key={item.title} className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-            <CardContent className="p-4">
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">{item.title}</p>
-              <p className="text-sm font-black text-slate-900 font-mono">{item.detail}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{item.note}</p>
-            </CardContent>
-          </Card>
-        ))}
       </motion.div>
 
       {/* Tabs */}
       <motion.div variants={itemVariants}>
-        <div className="flex bg-muted p-1 rounded-lg w-fit">
+        <div className="grid grid-cols-2 md:flex bg-muted p-1 rounded-xl gap-1">
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition-all cursor-pointer ${
+              className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all cursor-pointer ${
                 tab === t.id
                   ? 'bg-background shadow-sm text-primary'
                   : 'text-muted-foreground hover:text-foreground'
