@@ -38,6 +38,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       : { ...EMPTY_FORM, slotNumber: getNextSlot(usedSlots) }
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (product) {
@@ -60,9 +61,20 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     ? [product!.slotNumber, ...([1,2,3,4,5,6].filter(s => !usedSlots.includes(s)))]
     : [1,2,3,4,5,6].filter(s => !usedSlots.includes(s));
 
+  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
+
   const handleImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      setImageError(`Image is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum allowed size is 5 MB.`);
+      // Reset the input so the user can try again
+      e.target.value = '';
+      return;
+    }
+
+    setImageError(null);
     const reader = new FileReader();
     reader.onload = () => {
       setForm(f => ({ ...f, imageUrl: reader.result as string }));
@@ -107,9 +119,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   type="text"
                   placeholder="Or paste image URL..."
                   value={form.imageUrl.startsWith('data:') ? '' : form.imageUrl}
-                  onChange={e => setForm(f => ({ ...f, imageUrl: e.target.value }))}
+                  onChange={e => { setImageError(null); setForm(f => ({ ...f, imageUrl: e.target.value })); }}
                   className="text-xs h-8"
                 />
+                {imageError && (
+                  <p className="text-xs text-destructive leading-tight">{imageError}</p>
+                )}
               </div>
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageFile} />
             </div>

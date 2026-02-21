@@ -7,6 +7,8 @@ import { Settings } from '@/app/pages/Settings/index';
 import { Reports } from '@/app/pages/Reports/index';
 import Kiosk from '@/app/pages/Kiosk/index';
 import { Login } from '@/app/pages/Login/index';
+import { DevPayMongo } from '@/app/pages/DevPayMongo/index';
+import { DevMqtt } from '@/app/pages/DevMqtt/index';
 import { useAuth } from '../lib/AuthContext';
 import { Wheat } from 'lucide-react';
 
@@ -60,6 +62,10 @@ export function AppContent() {
         return <Reports />;
       case 'settings':
         return <Settings onNavigate={setCurrentPage} />;
+      case 'dev-paymongo':
+        return <DevPayMongo />;
+      case 'dev-mqtt':
+        return <DevMqtt />;
       default:
         return <Dashboard />;
     }

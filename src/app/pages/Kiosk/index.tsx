@@ -126,14 +126,16 @@ export default function Kiosk({ onExit }: { onExit?: () => void }) {
       case 'processing':
         return (
           <ProcessingPage 
-            paymentMethod="GCash" 
+            paymentMethod="QR Ph" 
             onComplete={handleProcessComplete} 
           />
         );
       case 'dispensing':
         return (
-          <DispensingPage 
-            onComplete={handleDispenseComplete} 
+          <DispensingPage
+            machineId={machineId!}
+            cart={cart}
+            onComplete={handleDispenseComplete}
           />
         );
       case 'receipt':

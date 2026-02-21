@@ -121,10 +121,54 @@ async function decrementStock(req, res) {
   return res.json(updated);
 }
 
+// ─── POST /api/products/:id/image ────────────────────────────────────
+// Accepts a multipart upload (field name: "image") and stores the binary
+// data directly in the database as a LONGBLOB.
+async function uploadProductImage(req, res) {
+  const { id } = req.params;
+
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded (field name must be 'image')" });
+  }
+
+  const product = await prisma.product.findUnique({ where: { id } });
+  if (!product) return res.status(404).json({ error: "Product not found" });
+
+  await prisma.product.update({
+    where: { id },
+    data: {
+      imageBlob: req.file.buffer,
+      imageMimeType: req.file.mimetype,
+    },
+  });
+
+  return res.json({ id, imageMimeType: req.file.mimetype, size: req.file.size });
+}
+
+// ─── GET /api/products/:id/image ─────────────────────────────────────
+// Streams the stored image blob back to the client with the correct
+// Content-Type. Returns 404 if no blob has been uploaded yet.
+async function getProductImage(req, res) {
+  const product = await prisma.product.findUnique({
+    where: { id: req.params.id },
+    select: { imageBlob: true, imageMimeType: true },
+  });
+
+  if (!product || !product.imageBlob) {
+    return res.status(404).json({ error: "No image found for this product" });
+  }
+
+  res.set("Content-Type", product.imageMimeType || "image/jpeg");
+  res.set("Cache-Control", "public, max-age=86400");
+  return res.send(product.imageBlob);
+}
+
 module.exports = {
   getProductsByMachine,
   createProduct,
   updateProduct,
   deleteProduct,
   decrementStock,
+  uploadProductImage,
+  getProductImage,
 };

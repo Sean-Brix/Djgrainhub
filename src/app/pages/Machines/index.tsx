@@ -128,7 +128,7 @@ export function Machines() {
       </div>
 
       {viewMode === 'map' ? (
-        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm h-[calc(100vh-280px)] min-h-[400px]">
+        <div className="relative z-0 isolate bg-card border border-border rounded-xl overflow-hidden shadow-sm h-[calc(100vh-280px)] min-h-[400px]">
           <MachineMap machines={filteredMachines} onSelectMachine={handleSelectMachine} />
         </div>
       ) : (

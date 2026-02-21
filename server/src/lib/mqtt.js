@@ -1,5 +1,7 @@
 const mqtt = require("mqtt");
 const dotenv = require("dotenv");
+const dispenseBus = require("./dispense-bus");
+const messageLog = require("./message-log");
 
 dotenv.config();
 
@@ -20,24 +22,42 @@ function connectMqtt() {
   client.on("connect", () => {
     console.log(`MQTT connected to ${brokerUrl}`);
 
-    client.publish("djgrainhub/test", "Testing", { qos: 1 }, (err) => {
-      if (err) console.error("MQTT publish error:", err.message);
-      else console.log("MQTT published: Testing → djgrainhub/test");
+    // Subscribe to both topics so the dev monitor can see all traffic
+    // "dispense" — confirmation from ESP32 after a dispense attempt
+    // "order"    — echoed back from broker (dev visibility into published orders)
+    const topics = ["dispense", "order"];
+    client.subscribe(topics, { qos: 1 }, (err) => {
+      if (err) console.error("MQTT subscribe error:", err.message);
+      else console.log("MQTT subscribed:", topics.join(", "));
     });
 
-    client.subscribe("Testing", { qos:2 }, ()=>{
-        console.log("Testing Subscribed");
-    })
+    client.on("message", (topic, rawMessage) => {
+      const raw = rawMessage.toString();
 
-    client.on("message", (topic, message)=>{
-        switch(topic){
-            case "Testing":
-                console.log("The message is: " + message);
-            default:
-                return;
+      // Log every message for the dev monitor
+      let parsed;
+      try { parsed = JSON.parse(raw); } catch { parsed = raw; }
+      messageLog.push(topic, parsed);
+
+      // Handle dispense confirmations — signal waiting HTTP handlers
+      if (topic === "dispense") {
+        try {
+          const payload = typeof parsed === "object" ? parsed : JSON.parse(raw);
+          // ESP32 identifies the machine with the "id" key
+          const machineId = payload.id;
+
+          if (!machineId) {
+            console.warn("MQTT dispense message missing id — ignoring");
+            return;
+          }
+
+          console.log(`MQTT dispense received for machine ${machineId}:`, payload);
+          dispenseBus.emit(`dispense:${machineId}`, payload);
+        } catch (e) {
+          console.error("MQTT dispense — failed to parse payload:", e.message);
         }
-    })
-
+      }
+    });
   });
 
   client.on("error", (err) => {

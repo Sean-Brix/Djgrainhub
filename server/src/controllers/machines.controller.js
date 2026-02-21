@@ -2,6 +2,24 @@ const { prisma } = require("../lib/prisma");
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
+/**
+ * Retries a Prisma operation on write-conflict (P2034 / deadlock).
+ * Uses exponential backoff: 50ms, 100ms, 200ms.
+ */
+async function withRetry(fn, retries = 3) {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (err?.code === "P2034" && attempt < retries - 1) {
+        await new Promise(r => setTimeout(r, 50 * 2 ** attempt));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 function machineWhereClause(user) {
   if (user.accessRole === "super_admin") return {};
   return user.ownedMachineId ? { id: user.ownedMachineId } : { id: "NONE" };
@@ -106,21 +124,23 @@ async function updateMachine(req, res) {
 
   const { name, location, lat, lng, status, capacity, lastRefill, earnings, alertCount } = req.body;
 
-  const machine = await prisma.machine.update({
-    where: { id },
-    data: {
-      ...(name !== undefined && { name }),
-      ...(location !== undefined && { location }),
-      ...(lat !== undefined && { lat: parseFloat(lat) }),
-      ...(lng !== undefined && { lng: parseFloat(lng) }),
-      ...(status !== undefined && { status }),
-      ...(capacity !== undefined && { capacity: parseInt(capacity) }),
-      ...(lastRefill !== undefined && { lastRefill: new Date(lastRefill) }),
-      ...(earnings !== undefined && { earnings: parseFloat(earnings) }),
-      ...(alertCount !== undefined && { alertCount: parseInt(alertCount) }),
-    },
-    include: { products: true },
-  });
+  const machine = await withRetry(() =>
+    prisma.machine.update({
+      where: { id },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(location !== undefined && { location }),
+        ...(lat !== undefined && { lat: parseFloat(lat) }),
+        ...(lng !== undefined && { lng: parseFloat(lng) }),
+        ...(status !== undefined && { status }),
+        ...(capacity !== undefined && { capacity: parseInt(capacity) }),
+        ...(lastRefill !== undefined && { lastRefill: new Date(lastRefill) }),
+        ...(earnings !== undefined && { earnings: parseFloat(earnings) }),
+        ...(alertCount !== undefined && { alertCount: parseInt(alertCount) }),
+      },
+      include: { products: true },
+    })
+  );
 
   return res.json(machine);
 }

@@ -1,0 +1,55 @@
+services:
+  - type: web
+    name: djgrainhub
+    env: node
+    region: singapore   # closest to PH; change to oregon/ohio if needed
+    plan: free
+
+    # ── Build ────────────────────────────────────────────────────────────────
+    # 1. Install frontend deps and build the React app into /dist
+    # 2. Install server deps (postinstall runs prisma generate automatically)
+    # 3. Apply any pending DB migrations
+    buildCommand: |
+      npm install
+      npm run build
+      cd server
+      npm install
+      npx prisma migrate deploy
+
+    # ── Start ────────────────────────────────────────────────────────────────
+    startCommand: NODE_ENV=production node server/src/index.js
+
+    # ── Environment variables ────────────────────────────────────────────────
+    # Set these in the Render dashboard → Environment tab.
+    # Listed here so nothing is forgotten; values are intentionally blank.
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Database (PlanetScale / Railway / any MySQL URL)
+      - key: DATABASE_URL
+        sync: false          # secret — enter value in dashboard
+
+      # JWT
+      - key: JWT_SECRET
+        sync: false
+
+      # MQTT broker (e.g. HiveMQ Cloud, EMQX)
+      - key: MQTT_BROKER_URL
+        sync: false          # e.g. mqtts://abc.hivemq.cloud:8883
+      - key: MQTT_USERNAME
+        sync: false
+      - key: MQTT_PASSWORD
+        sync: false
+
+      # PayMongo
+      - key: PAYMONGO_SECRET_KEY
+        sync: false
+      - key: PAYMONGO_PUBLIC_KEY
+        sync: false
+      - key: PAYMONGO_WEBHOOK_SECRET
+        sync: false
+
+      # Port — Render sets this automatically, but listed for clarity
+      - key: PORT
+        value: 10000

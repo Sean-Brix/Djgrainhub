@@ -1,12 +1,27 @@
 const { Router } = require("express");
+const multer = require("multer");
 const {
   getProductsByMachine,
   createProduct,
   updateProduct,
   deleteProduct,
   decrementStock,
+  uploadProductImage,
+  getProductImage,
 } = require("../controllers/products.controller");
 const { authenticate } = require("../middleware/auth.middleware");
+
+// 5 MB limit; images kept in memory (buffer) and written straight to the DB
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter(_req, file, cb) {
+    if (!file.mimetype.startsWith("image/")) {
+      return cb(new Error("Only image files are accepted"), false);
+    }
+    cb(null, true);
+  },
+});
 
 const router = Router();
 router.use(authenticate);
@@ -19,6 +34,8 @@ router.use(authenticate);
 // PATCH  /api/products/:id                         — update product details
 // DELETE /api/products/:id                         — remove product from slot
 // PATCH  /api/products/:id/stock                   — decrement stock after dispensing
+// POST   /api/products/:id/image                   — upload image blob (multipart, field: "image")
+// GET    /api/products/:id/image                   — serve image blob
 
 // (Nested routes are mounted in machines.routes.js via router.use)
 
@@ -31,5 +48,7 @@ machineProductsRouter.post("/", createProduct);
 router.patch("/:id", updateProduct);
 router.delete("/:id", deleteProduct);
 router.patch("/:id/stock", decrementStock);
+router.post("/:id/image", upload.single("image"), uploadProductImage);
+router.get("/:id/image", getProductImage);
 
 module.exports = { productsRouter: router, machineProductsRouter };

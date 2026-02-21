@@ -4,7 +4,9 @@ import {
   Monitor, 
   Receipt, 
   Settings,
-  MessageSquareWarning
+  MessageSquareWarning,
+  FlaskConical,
+  Radio,
 } from 'lucide-react';
 import { useAuth, permissions } from '../../lib/AuthContext';
 import { getAccessRoleLabel } from '../../lib/auth';
@@ -30,7 +32,9 @@ export function Layout({ children, currentPage, onNavigate, onLogout, user }: La
     { id: 'machines', label: 'Machines', icon: Monitor, permission: permissions.canManageMachines },
     { id: 'transactions', label: 'Transactions', icon: Receipt, permission: permissions.canViewTransactions },
     { id: 'reports', label: 'Reports', icon: MessageSquareWarning, permission: permissions.canViewReports },
-    { id: 'settings', label: 'Settings', icon: Settings, permission: permissions.canViewDashboard },
+    { id: 'settings',      label: 'Settings',    icon: Settings,       permission: permissions.canViewDashboard },
+    { id: 'dev-paymongo', label: 'PayMongo',     icon: FlaskConical,   permission: permissions.canManageMachines },
+    { id: 'dev-mqtt',     label: 'MQTT Console', icon: Radio,          permission: permissions.canManageMachines },
   ];
 
   const navItems = allNavItems.filter(item => hasPermission(item.permission));
