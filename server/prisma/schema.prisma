@@ -78,7 +78,7 @@ model Product {
   weight     Float                     // kg per unit – used for stock-in-kg metric
   stock         Int        @default(0)    // current units in machine
   imageUrl      String?    @db.Text
-  imageBlob     Bytes?                    // binary image data (LONGBLOB in MySQL)
+  imageBlob     Bytes?                    // binary image data (bytea in PostgreSQL)
   imageMimeType String?                   // e.g. "image/jpeg", "image/png", "image/webp"
   saleItems     SaleItem[]
   createdAt  DateTime   @default(now())
