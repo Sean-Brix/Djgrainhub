@@ -32,11 +32,52 @@ app.use("/api", router);
 // The Vite dev server (npm run dev) still proxies /api to this port.
 const fs = require("fs");
 if (fs.existsSync(DIST_DIR)) {
-  app.use(express.static(DIST_DIR));
+
+  // ── PWA: correct MIME type for web manifest ──────────────────────────────
+  // Chrome requires Content-Type: application/manifest+json on the manifest
+  // file or it will refuse to install the PWA.
+  app.get("/manifest.webmanifest", (_req, res) => {
+    res
+      .setHeader("Content-Type", "application/manifest+json")
+      .setHeader("Cache-Control", "no-cache")
+      .sendFile(path.join(DIST_DIR, "manifest.webmanifest"));
+  });
+
+  // ── PWA: service worker needs no-cache + full scope permission ───────────
+  // Service-Worker-Allowed: / lets the SW control the entire origin even if
+  // it was served from a sub-path.  Cache-Control: no-cache ensures browsers
+  // always re-check for a new SW version on every load.
+  app.get("/sw.js", (_req, res) => {
+    res
+      .setHeader("Content-Type", "application/javascript")
+      .setHeader("Cache-Control", "no-cache")
+      .setHeader("Service-Worker-Allowed", "/")
+      .sendFile(path.join(DIST_DIR, "sw.js"));
+  });
+
+  // Workbox runtime (must also not be aggressively cached)
+  app.get("/workbox-*.js", (req, res) => {
+    res
+      .setHeader("Content-Type", "application/javascript")
+      .setHeader("Cache-Control", "no-cache")
+      .sendFile(path.join(DIST_DIR, path.basename(req.path)));
+  });
+
+  // Static assets (JS/CSS/images) — long-lived cache with content hash
+  app.use(express.static(DIST_DIR, {
+    setHeaders(res, filePath) {
+      if (filePath.endsWith(".html")) {
+        // HTML must never be cached so the app updates reliably
+        res.setHeader("Cache-Control", "no-cache");
+      }
+    },
+  }));
 
   // SPA fallback — send index.html for any non-API route
   app.get("*", (_req, res) => {
-    res.sendFile(path.join(DIST_DIR, "index.html"));
+    res
+      .setHeader("Cache-Control", "no-cache")
+      .sendFile(path.join(DIST_DIR, "index.html"));
   });
 }
 
