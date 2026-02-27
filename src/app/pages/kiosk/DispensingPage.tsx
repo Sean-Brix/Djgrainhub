@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Check, Wheat, AlertTriangle, RefreshCw } from 'lucide-react';
 import { getStoredToken } from '../../lib/auth';
+import { api } from '../../lib/api';
 
 interface CartItem {
   product: { id: string; slotNumber: number; name: string; price: number };
@@ -11,6 +12,7 @@ interface CartItem {
 interface DispensingPageProps {
   machineId: string;
   cart: CartItem[];
+  saleId?: string;        // passed from kiosk — used to confirm sale on server
   onComplete: () => void;
 }
 
@@ -33,7 +35,7 @@ function buildSlotPayload(cart: CartItem[]): Record<string, number> {
   return slots;
 }
 
-export function DispensingPage({ machineId, cart, onComplete }: DispensingPageProps) {
+export function DispensingPage({ machineId, cart, saleId, onComplete }: DispensingPageProps) {
   const [phase, setPhase] = useState<Phase>('sending');
   const [slotResults, setSlotResults] = useState<Record<string, SlotResult>>({});
   const [errorMsg, setErrorMsg] = useState<string>('');
@@ -77,6 +79,14 @@ export function DispensingPage({ machineId, cart, onComplete }: DispensingPagePr
       setSlotResults(data.dispenseConfirmation || {});
 
       if (data.allOk) {
+        // Fallback: ensure the sale is marked completed in the DB.
+        // The webhook should have already done this, but if it didn’t
+        // (e.g. ngrok not running in dev) this guarantees a clean record.
+        if (saleId) {
+          api.patch(`/sales/${saleId}/complete`, {}).catch(() => {
+            // Non-fatal — sale may already be completed by webhook
+          });
+        }
         setPhase('success');
         setTimeout(onComplete, 2000);
       } else {

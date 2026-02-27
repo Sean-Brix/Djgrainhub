@@ -91,18 +91,21 @@ model Product {
 // SALE
 // A completed or failed kiosk transaction.
 // paymentMethod captured at checkout (GCash/QR PH).
+// paymentIntentId links the sale to a PayMongo
+// payment intent so the webhook can confirm it.
 // ─────────────────────────────────────────────
 model Sale {
-  id            String     @id @default(cuid())
-  machineId     String
-  machine       Machine    @relation(fields: [machineId], references: [id])
-  items         SaleItem[]
-  totalPrice    Float
-  paymentMethod String     @default("GCash") // "GCash" | "QR PH" | "Cash"
-  timestamp     DateTime   @default(now())
-  status        String     @default("completed") // "completed" | "failed"
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id              String     @id @default(cuid())
+  machineId       String
+  machine         Machine    @relation(fields: [machineId], references: [id])
+  items           SaleItem[]
+  totalPrice      Float
+  paymentMethod   String     @default("GCash") // "GCash" | "QR PH" | "Cash"
+  timestamp       DateTime   @default(now())
+  status          String     @default("pending") // "pending" | "completed" | "failed"
+  paymentIntentId String?    @unique             // PayMongo pi_xxx — set at checkout
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 }
 
 // ─────────────────────────────────────────────

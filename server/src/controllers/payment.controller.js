@@ -5,10 +5,15 @@
  * Uses native fetch (Node 18+). No extra dependencies required.
  *
  * Env vars needed:
- *   PAYMONGO_SECRET_KEY  — sk_test_... or sk_live_...
- *   PAYMONGO_PUBLIC_KEY  — pk_test_... or pk_live_...
- *   FRONTEND_URL         — e.g. http://localhost:5173
+ *   PAYMONGO_SECRET_KEY     — sk_test_... or sk_live_...
+ *   PAYMONGO_PUBLIC_KEY     — pk_test_... or pk_live_...
+ *   PAYMONGO_WEBHOOK_SECRET — whsk_... (from PayMongo Dashboard → Webhooks)
+ *   FRONTEND_URL            — e.g. http://localhost:5173
  */
+
+const crypto = require("crypto");
+const { prisma } = require("../lib/prisma");
+const { completeSaleById } = require("./sales.controller");
 
 const PAYMONGO_BASE = "https://api.paymongo.com/v1";
 
@@ -195,7 +200,34 @@ const getPaymentLink = async (req, res) => {
  * Public endpoint — PayMongo calls this with payment events.
  * Register this URL in your PayMongo dashboard → Webhooks.
  */
-const handleWebhook = (req, res) => {
+const handleWebhook = async (req, res) => {
+  // ── Signature verification ────────────────────────────────────────────────
+  const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const sigHeader = req.headers["paymongo-signature"];
+    if (!sigHeader) {
+      console.warn("[PayMongo] Missing Paymongo-Signature header — rejected");
+      return res.status(400).json({ error: "Missing signature" });
+    }
+
+    // Header format: "t=<timestamp>,te=<hmac_sha256>"
+    const parts = Object.fromEntries(sigHeader.split(",").map((p) => p.split("=")));
+    const timestamp = parts["t"];
+    const receivedSig = parts["te"];
+
+    // Payload to sign: "<timestamp>.<raw json body>"
+    const rawBody = typeof req.rawBody === "string" ? req.rawBody : JSON.stringify(req.body);
+    const expected = crypto
+      .createHmac("sha256", webhookSecret)
+      .update(`${timestamp}.${rawBody}`)
+      .digest("hex");
+
+    if (receivedSig !== expected) {
+      console.warn("[PayMongo] Signature mismatch — rejected");
+      return res.status(400).json({ error: "Invalid signature" });
+    }
+  }
+
   const event = req.body;
   const type = event?.data?.attributes?.type ?? "unknown";
   const timestamp = new Date().toISOString();
@@ -209,15 +241,42 @@ const handleWebhook = (req, res) => {
   // ── Handle specific event types ──────────────────────────────────────────
   switch (type) {
     case "payment.paid": {
-      const paymentId = event?.data?.attributes?.data?.id;
-      const paidAmount = event?.data?.attributes?.data?.attributes?.amount;
-      console.log(`  ↳ payment.paid — id:${paymentId} amount:${paidAmount} centavos`);
-      // TODO: update Sale status → 'completed', trigger MQTT dispense signal
+      const paymentId   = event?.data?.attributes?.data?.id;
+      const paidAmount  = event?.data?.attributes?.data?.attributes?.amount;
+      const intentId    = event?.data?.attributes?.data?.attributes?.payment_intent_id;
+      console.log(`  ↳ payment.paid — id:${paymentId} intent:${intentId} amount:${paidAmount} centavos`);
+
+      if (intentId) {
+        try {
+          // Find the pending sale that was created when the QR was generated
+          const sale = await prisma.sale.findUnique({ where: { paymentIntentId: intentId } });
+          if (sale) {
+            await completeSaleById(sale.id);
+            console.log(`  ↳ Sale ${sale.id} marked completed via webhook`);
+          } else {
+            console.warn(`  ↳ No pending sale found for intentId: ${intentId}`);
+          }
+        } catch (err) {
+          console.error(`  ↳ Error completing sale for intent ${intentId}:`, err.message);
+        }
+      }
       break;
     }
     case "payment.failed": {
-      console.log(`  ↳ payment.failed`);
-      // TODO: update Sale status → 'failed'
+      const intentId = event?.data?.attributes?.data?.attributes?.payment_intent_id;
+      console.log(`  ↳ payment.failed — intent:${intentId}`);
+
+      if (intentId) {
+        try {
+          await prisma.sale.updateMany({
+            where: { paymentIntentId: intentId, status: "pending" },
+            data:  { status: "failed" },
+          });
+          console.log(`  ↳ Sale for intent ${intentId} marked failed`);
+        } catch (err) {
+          console.error(`  ↳ Error marking sale failed for intent ${intentId}:`, err.message);
+        }
+      }
       break;
     }
     case "link.payment.paid": {

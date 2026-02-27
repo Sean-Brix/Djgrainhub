@@ -27,6 +27,13 @@ export default defineConfig({
     },
   },
 
+  // Output directory — must match DIST_DIR in server/src/index.js
+  // server resolves: path.join(__dirname, '..', '..', 'dist') → <repo>/dist
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,   // wipe stale files before each build
+  },
+
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
 })

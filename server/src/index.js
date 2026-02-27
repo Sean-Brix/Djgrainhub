@@ -14,7 +14,13 @@ const PORT = process.env.PORT || 3000;
 const DIST_DIR = path.join(__dirname, "..", "..", "dist");
 
 app.use(cors());
-app.use(express.json({ limit: "200kb" }));
+app.use(express.json({
+  limit: "200kb",
+  // Preserve raw body string for PayMongo webhook signature verification
+  verify: (req, _res, buf, encoding) => {
+    req.rawBody = buf.toString(encoding || "utf8");
+  },
+}));
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use("/api", router);

@@ -21,8 +21,9 @@ interface CartItem {
 
 export default function Kiosk({ onExit }: { onExit?: () => void }) {
   const { user } = useAuth();
-  const { getMachinesForUser, getProductsForMachine, addSale, decrementStock, updateMachine } = useData();
+  const { getMachinesForUser, getProductsForMachine } = useData();
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [saleId, setSaleId] = useState<string | null>(null);
 
   const machines = user ? getMachinesForUser(user) : [];
 
@@ -50,33 +51,14 @@ export default function Kiosk({ onExit }: { onExit?: () => void }) {
 
   const handleStart = () => setStep('products');
   const handleCheckout = () => setStep('payment');
-  const handlePaymentSelect = () => {
+  const handlePaymentConfirmed = (confirmedSaleId: string) => {
+    setSaleId(confirmedSaleId);
     setStep('processing');
   };
   const handleProcessComplete = () => {
-    if (machineId && cart.length > 0) {
-      const saleId = `sale-kiosk-${Date.now()}`;
-      addSale({
-        id: saleId,
-        machineId,
-        items: cart.map(item => ({
-          productId: item.product.id,
-          quantity: item.quantity,
-          price: item.product.price,
-        })),
-        totalPrice: totalAmount,
-        timestamp: new Date().toISOString(),
-        status: 'completed',
-      });
-
-      cart.forEach(item => {
-        decrementStock(item.product.id, item.quantity);
-      });
-
-      updateMachine(machineId, {
-        earnings: (machines.find(m => m.id === machineId)?.earnings || 0) + totalAmount,
-      });
-    }
+    // Sale record + stock decrement are handled server-side:
+    //   • Webhook (payment.paid) completes the sale when PayMongo confirms
+    //   • DispensingPage calls PATCH /api/sales/:id/complete as a fallback
     setStep('dispensing');
   };
   const handleDispenseComplete = () => setStep('receipt');
@@ -118,8 +100,10 @@ export default function Kiosk({ onExit }: { onExit?: () => void }) {
       case 'payment':
         return (
           <PaymentPage 
-            totalAmount={totalAmount} 
-            onSuccess={handlePaymentSelect} 
+            totalAmount={totalAmount}
+            machineId={machineId!}
+            cart={cart}
+            onSuccess={handlePaymentConfirmed} 
             onBack={() => setStep('products')} 
           />
         );
@@ -135,6 +119,7 @@ export default function Kiosk({ onExit }: { onExit?: () => void }) {
           <DispensingPage
             machineId={machineId!}
             cart={cart}
+            saleId={saleId ?? undefined}
             onComplete={handleDispenseComplete}
           />
         );

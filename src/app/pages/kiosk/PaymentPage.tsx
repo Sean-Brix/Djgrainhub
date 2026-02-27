@@ -5,20 +5,28 @@ import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { api } from '../../lib/api';
 
+interface CartItem {
+  product: { id: string; slotNumber: number; name: string; price: number };
+  quantity: number;
+}
+
 interface PaymentPageProps {
   totalAmount: number;
+  machineId: string;
+  cart: CartItem[];
   onBack: () => void;
-  onSuccess: () => void;
+  onSuccess: (saleId: string) => void;
 }
 
 type Phase = 'generating' | 'ready' | 'error';
 
-export function PaymentPage({ totalAmount, onBack, onSuccess }: PaymentPageProps) {
+export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }: PaymentPageProps) {
   const [phase, setPhase] = useState<Phase>('generating');
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [elapsed, setElapsed] = useState(0);
   const intentIdRef = useRef<string | null>(null);
+  const saleIdRef   = useRef<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -44,11 +52,26 @@ export function PaymentPage({ totalAmount, onBack, onSuccess }: PaymentPageProps
       const clientKey = intentData?.data?.attributes?.client_key;
       intentIdRef.current = id;
 
-      // 2. Create qrph payment method
+      // 2. Create pending sale record — links this transaction to the intent
+      //    The webhook will mark it completed once PayMongo confirms payment.
+      const saleData = await api.post<any>('/sales', {
+        machineId,
+        paymentMethod: 'QR PH',
+        status: 'pending',
+        paymentIntentId: id,
+        items: cart.map(item => ({
+          productId: item.product.id,
+          quantity:  item.quantity,
+          unitPrice: item.product.price,
+        })),
+      });
+      saleIdRef.current = saleData?.id ?? null;
+
+      // 3. Create qrph payment method
       const methodData = await api.post<any>('/payment/method', { type: 'qrph' });
       const methodId   = methodData?.data?.id;
 
-      // 3. Attach → get QR image
+      // 4. Attach → get QR image
       const attachData = await api.post<any>(`/payment/intent/${id}/attach`, {
         payment_method_id: methodId,
         client_key: clientKey,
@@ -59,14 +82,14 @@ export function PaymentPage({ totalAmount, onBack, onSuccess }: PaymentPageProps
       setQrUrl(imageUrl);
       setPhase('ready');
 
-      // 4. Poll for payment confirmation every 3s
+      // 5. Poll PayMongo every 3s for payment confirmation
       pollRef.current = setInterval(async () => {
         try {
           const status = await api.get<any>(`/payment/intent/${id}`);
           const s = status?.data?.attributes?.status;
           if (s === 'succeeded') {
             stopPolling();
-            onSuccess();
+            onSuccess(saleIdRef.current ?? '');
           } else if (s === 'failed') {
             stopPolling();
             setErrorMsg('Payment failed. Please try again.');
@@ -75,19 +98,13 @@ export function PaymentPage({ totalAmount, onBack, onSuccess }: PaymentPageProps
         } catch { /* silently ignore poll errors */ }
       }, 3000);
 
-      // TODO: remove — simulates a successful webhook after 7s for demo
-      setTimeout(() => {
-        stopPolling();
-        onSuccess();
-      }, 7000);
-
       // Elapsed timer for UX
       tickRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
     } catch (e: any) {
       setErrorMsg(e.message || 'Failed to generate QR code');
       setPhase('error');
     }
-  }, [totalAmount, onSuccess]);
+  }, [totalAmount, machineId, cart, onSuccess]);
 
   useEffect(() => {
     generateQR();
