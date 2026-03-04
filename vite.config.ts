@@ -54,6 +54,12 @@ export default defineConfig({
           },
         ],
       },
+      // Enable service worker in `vite dev` so the install prompt fires locally
+      devOptions: {
+        enabled: true,
+        suppressWarnings: true,
+        type: 'module',
+      },
       workbox: {
         // Cache strategy: network-first for API, cache-first for static assets
         runtimeCaching: [

@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, QrCode, Smartphone, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { ChevronLeft, QrCode, Smartphone, Loader2, AlertCircle, RefreshCw, FlaskConical } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { api } from '../../lib/api';
+import { PAYMENT_TEST_MODE_KEY } from '../Settings/PaymentGatewaySettings';
 
 interface CartItem {
   product: { id: string; slotNumber: number; name: string; price: number };
@@ -21,10 +22,13 @@ interface PaymentPageProps {
 type Phase = 'generating' | 'ready' | 'error';
 
 export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }: PaymentPageProps) {
+  const isTestMode = localStorage.getItem(PAYMENT_TEST_MODE_KEY) === 'true';
+
   const [phase, setPhase] = useState<Phase>('generating');
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [elapsed, setElapsed] = useState(0);
+  const [testCountdown, setTestCountdown] = useState(5);
   const intentIdRef = useRef<string | null>(null);
   const saleIdRef   = useRef<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -40,7 +44,44 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
     setQrUrl(null);
     setErrorMsg('');
     setElapsed(0);
+    setTestCountdown(5);
     stopPolling();
+
+    // ── TEST MODE: skip PayMongo, auto-succeed after 5 s ──────────────────
+    if (isTestMode) {
+      try {
+        const saleData = await api.post<any>('/sales', {
+          machineId,
+          paymentMethod: 'QR PH (Test)',
+          status: 'pending',
+          paymentIntentId: null,
+          items: cart.map(item => ({
+            productId: item.product.id,
+            quantity:  item.quantity,
+            unitPrice: item.product.price,
+          })),
+        });
+        saleIdRef.current = saleData?.id ?? null;
+        setPhase('ready');
+
+        let remaining = 5;
+        setTestCountdown(remaining);
+        tickRef.current = setInterval(() => {
+          remaining -= 1;
+          setTestCountdown(remaining);
+          if (remaining <= 0) {
+            stopPolling();
+            onSuccess(saleIdRef.current ?? '');
+          }
+        }, 1000);
+      } catch (e: any) {
+        setErrorMsg(e.message || 'Failed to create test sale');
+        setPhase('error');
+      }
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     try {
       // 1. Create payment intent (qrph only)
       const intentData = await api.post<any>('/payment/intent', {
@@ -131,8 +172,14 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
         <Card className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full border-2 border-[#1F4D3A]/10">
           <div className="mb-6">
-            <h2 className="text-2xl font-bold mb-1">Scan to Pay</h2>
-            <p className="text-[#1F4D3A]/60 text-sm">Use GCash, Maya, or any QR Ph‑enabled app</p>
+            <h2 className="text-2xl font-bold mb-1">
+              {isTestMode ? 'Test Payment' : 'Scan to Pay'}
+            </h2>
+            <p className="text-[#1F4D3A]/60 text-sm">
+              {isTestMode
+                ? 'Testing mode is active — payment will be simulated'
+                : 'Use GCash, Maya, or any QR Ph\u2011enabled app'}
+            </p>
           </div>
 
           {/* QR area */}
@@ -146,11 +193,37 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
             {phase === 'generating' && (
               <div className="flex flex-col items-center gap-3 text-[#1F4D3A]/60">
                 <Loader2 size={40} className="animate-spin" />
-                <p className="text-sm font-medium">Generating QR code…</p>
+                <p className="text-sm font-medium">
+                  {isTestMode ? 'Setting up test payment\u2026' : 'Generating QR code\u2026'}
+                </p>
               </div>
             )}
 
-            {phase === 'ready' && qrUrl && (
+            {/* Test-mode countdown display */}
+            {isTestMode && phase === 'ready' && (
+              <div className="flex flex-col items-center gap-4 text-[#1F4D3A]">
+                <div className="relative flex items-center justify-center w-28 h-28">
+                  <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="44" fill="none" stroke="#1F4D3A" strokeOpacity="0.1" strokeWidth="8" />
+                    <circle
+                      cx="50" cy="50" r="44" fill="none"
+                      stroke="#F59E0B" strokeWidth="8" strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 44}`}
+                      strokeDashoffset={`${2 * Math.PI * 44 * (testCountdown / 5)}`}
+                      style={{ transition: 'stroke-dashoffset 0.9s linear' }}
+                    />
+                  </svg>
+                  <span className="text-4xl font-black text-amber-500">{testCountdown}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs font-medium text-amber-600">
+                  <FlaskConical size={13} />
+                  <span>Simulating payment\u2026</span>
+                </div>
+              </div>
+            )}
+
+            {/* Real QR code */}
+            {!isTestMode && phase === 'ready' && qrUrl && (
               <img
                 src={qrUrl}
                 alt="QR Ph payment code"
@@ -176,16 +249,22 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
           </div>
 
           {/* Status */}
-          {phase === 'ready' && (
+          {isTestMode && phase === 'ready' && (
+            <div className="flex items-center justify-center gap-2 text-sm font-medium text-amber-500">
+              <FlaskConical size={15} className="animate-pulse" />
+              <span>Auto-approving in {testCountdown}s\u2026</span>
+            </div>
+          )}
+          {!isTestMode && phase === 'ready' && (
             <div className="flex items-center justify-center gap-2 text-sm text-[#1F4D3A]/50">
               <Smartphone size={15} className="animate-pulse" />
-              <span>Waiting for payment… <span className="font-mono">{minutes}:{seconds}</span></span>
+              <span>Waiting for payment\u2026 <span className="font-mono">{minutes}:{seconds}</span></span>
             </div>
           )}
           {phase === 'generating' && (
             <div className="flex items-center justify-center gap-2 text-sm text-[#1F4D3A]/40">
               <QrCode size={15} />
-              <span>Connecting to PayMongo…</span>
+              <span>{isTestMode ? 'Preparing test mode\u2026' : 'Connecting to PayMongo\u2026'}</span>
             </div>
           )}
         </Card>

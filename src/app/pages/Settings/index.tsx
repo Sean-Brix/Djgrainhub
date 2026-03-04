@@ -2,9 +2,11 @@ import React from 'react';
 import { useAuth } from '../../lib/AuthContext';
 import { AppearanceSettings } from './AppearanceSettings';
 import { KioskModeLauncher } from './KioskModeLauncher';
+import { InstallAppSettings } from './InstallAppSettings';
 import { ProfileSettings } from './ProfileSettings';
 import { SecuritySettings } from './SecuritySettings';
 import { NotificationSettings } from './NotificationSettings';
+import { PaymentGatewaySettings } from './PaymentGatewaySettings';
 import { AboutApp } from './AboutApp';
 
 interface SettingsProps {
@@ -26,8 +28,10 @@ export function Settings({ onNavigate }: SettingsProps) {
       </div>
 
       <div className="grid gap-6">
+        <InstallAppSettings />
         <AppearanceSettings />
         <KioskModeLauncher onNavigate={onNavigate} />
+        <PaymentGatewaySettings />
         <ProfileSettings user={user} />
         <SecuritySettings />
         <NotificationSettings />
