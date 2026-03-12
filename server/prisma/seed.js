@@ -9,8 +9,29 @@
 
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcrypt");
+const fs = require("fs");
+const path = require("path");
 
 const prisma = new PrismaClient();
+
+// ─── Load Product Images ─────────────────────────────────────────────
+// Maps slot numbers to their corresponding image files
+const IMAGE_DIR = path.join(__dirname, "..", "..", "src", "assets");
+
+function getProductImage(slotNumber) {
+  try {
+    const imagePath = path.join(IMAGE_DIR, `${slotNumber}.jpg`);
+    if (fs.existsSync(imagePath)) {
+      return {
+        blob: fs.readFileSync(imagePath),
+        mimeType: "image/jpeg",
+      };
+    }
+  } catch (err) {
+    console.warn(`  ⚠ Could not load image for slot ${slotNumber}:`, err.message);
+  }
+  return null;
+}
 
 // ─── Source data (ported from src/db/*.json) ────────────────────────
 
@@ -292,19 +313,23 @@ async function main() {
   // ── Products ───────────────────────────────────────────────────────
   console.log("\n🌾 Seeding products...");
   for (const p of PRODUCTS) {
+    const imageData = getProductImage(p.slotNumber);
+    
     await prisma.product.upsert({
       where: { id: p.id },
       update: {},
       create: {
-        id:         p.id,
-        machineId:  p.machineId,
-        slotNumber: p.slotNumber,
-        name:       p.name,
-        price:      p.price,
-        cost:       p.cost,
-        weight:     p.weight,
-        stock:      p.stock,
-        imageUrl:   p.imageUrl,
+        id:            p.id,
+        machineId:     p.machineId,
+        slotNumber:    p.slotNumber,
+        name:          p.name,
+        price:         p.price,
+        cost:          p.cost,
+        weight:        p.weight,
+        stock:         p.stock,
+        imageUrl:      p.imageUrl,
+        imageBlob:     imageData?.blob || null,
+        imageMimeType: imageData?.mimeType || null,
       },
     });
   }

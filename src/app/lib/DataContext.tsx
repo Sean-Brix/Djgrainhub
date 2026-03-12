@@ -33,6 +33,12 @@ import type {
 // ─── API → frontend type mappers ──────────────────────────────────────
 
 function mapProduct(p: any): Product {
+  // If no imageUrl but has imageBlob/imageMimeType, construct URL to blob endpoint
+  let imageUrl = p.imageUrl || '';
+  if (!imageUrl && p.imageMimeType) {
+    imageUrl = `/api/products/${p.id}/image`;
+  }
+  
   return {
     id: p.id,
     machineId: p.machineId,
@@ -42,7 +48,7 @@ function mapProduct(p: any): Product {
     cost: Number(p.cost),
     weight: Number(p.weight),
     stock: p.stock,
-    imageUrl: p.imageUrl || '',
+    imageUrl,
   };
 }
 

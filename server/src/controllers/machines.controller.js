@@ -34,7 +34,24 @@ async function getMachines(req, res) {
   const machines = await prisma.machine.findMany({
     where,
     include: {
-      products: { orderBy: { slotNumber: "asc" } },
+      products: { 
+        orderBy: { slotNumber: "asc" },
+        select: {
+          id: true,
+          machineId: true,
+          slotNumber: true,
+          name: true,
+          price: true,
+          cost: true,
+          weight: true,
+          stock: true,
+          imageUrl: true,
+          imageMimeType: true,
+          // imageBlob excluded - too large
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
       owner: { select: { id: true, name: true } },
       _count: { select: { alerts: { where: { status: "active" } } } },
     },
@@ -51,7 +68,24 @@ async function getMachineById(req, res) {
   const machine = await prisma.machine.findUnique({
     where: { id: req.params.id },
     include: {
-      products: { orderBy: { slotNumber: "asc" } },
+      products: { 
+        orderBy: { slotNumber: "asc" },
+        select: {
+          id: true,
+          machineId: true,
+          slotNumber: true,
+          name: true,
+          price: true,
+          cost: true,
+          weight: true,
+          stock: true,
+          imageUrl: true,
+          imageMimeType: true,
+          // imageBlob excluded - too large
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
       owner: { select: { id: true, name: true } },
       alerts: {
         where: { status: "active" },

@@ -24,31 +24,35 @@ const upload = multer({
 });
 
 const router = Router();
+
+// Public route - no auth required for image retrieval (img tags can't send headers)
+router.get("/:id/image", getProductImage);
+
+// All routes below require authentication
 router.use(authenticate);
 
 // Nested under /api/machines/:machineId/products
 // GET    /api/machines/:machineId/products         — list products for machine
-// POST   /api/machines/:machineId/products         — add product to slot
+// POST   /api/machines/:machineId/products         — add product to slot (supports image upload)
 
 // Flat product routes
-// PATCH  /api/products/:id                         — update product details
+// PATCH  /api/products/:id                         — update product details (supports image upload)
 // DELETE /api/products/:id                         — remove product from slot
 // PATCH  /api/products/:id/stock                   — decrement stock after dispensing
 // POST   /api/products/:id/image                   — upload image blob (multipart, field: "image")
-// GET    /api/products/:id/image                   — serve image blob
+// GET    /api/products/:id/image                   — serve image blob (public, see above)
 
 // (Nested routes are mounted in machines.routes.js via router.use)
 
 const machineProductsRouter = Router({ mergeParams: true });
 machineProductsRouter.use(authenticate);
 machineProductsRouter.get("/", getProductsByMachine);
-machineProductsRouter.post("/", createProduct);
+machineProductsRouter.post("/", upload.single("image"), createProduct);
 
 // Standalone product actions
-router.patch("/:id", updateProduct);
+router.patch("/:id", upload.single("image"), updateProduct);
 router.delete("/:id", deleteProduct);
 router.patch("/:id/stock", decrementStock);
 router.post("/:id/image", upload.single("image"), uploadProductImage);
-router.get("/:id/image", getProductImage);
 
 module.exports = { productsRouter: router, machineProductsRouter };

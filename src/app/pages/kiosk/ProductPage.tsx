@@ -98,7 +98,7 @@ export function ProductPage({ products, cart, onUpdateCart, onCheckout, onExit }
 
       {/* ── Product Grid (2 cols × 3 rows, no scroll) ── */}
       <div className="flex-1 overflow-hidden p-2.5 pb-0">
-        <div className="grid grid-cols-2 gap-2 h-full" style={{ gridTemplateRows: 'repeat(3, 1fr)' }}>
+        <div className="grid grid-cols-2 gap-2.5 h-full" style={{ gridTemplateRows: 'repeat(3, 1fr)' }}>
           {displaySlots.map((product, idx) => {
             const cartItem = product ? cart.find(item => item.product.id === product.id) : null;
             const available = product && product.stock > 0;
@@ -110,45 +110,45 @@ export function ProductPage({ products, cart, onUpdateCart, onCheckout, onExit }
                 transition={{ delay: idx * 0.04 }}
                 whileTap={available ? { scale: 0.97 } : {}}
                 onClick={() => product && available && handleSelectProduct(product)}
-                className={`rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col relative
+                className={`rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col relative h-full
                   ${!available ? 'opacity-55 cursor-not-allowed' : 'cursor-pointer active:shadow-md'}
                   ${cartItem ? 'ring-2 ring-[#1F4D3A]' : ''}`}
               >
                 {product ? (
                   <>
-                    {/* Product image — takes upper ~55% of card */}
-                    <div className="relative flex-shrink-0" style={{ flex: '0 0 55%' }}>
-                      <ImageWithFallback
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
+                    {/* Product image — 70% of card height */}
+                    <div className="relative bg-slate-50 overflow-hidden" style={{ height: '70%' }}>
+                      <div className="absolute inset-0 flex items-center justify-center p-3">
+                        <ImageWithFallback
+                          src={product.imageUrl}
+                          alt={product.name}
+                          className="max-w-full max-h-full object-contain"
+                        />
+                      </div>
                       {/* Price badge */}
-                      <span className="absolute top-1.5 right-1.5 bg-[#1F4D3A] text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow">
+                      <span className="absolute top-2 right-2 bg-[#1F4D3A] text-white text-xs font-black px-2.5 py-1 rounded-full shadow-md z-10">
                         ₱{product.price}
                       </span>
                       {/* In-cart indicator */}
                       {cartItem && (
-                        <span className="absolute top-1.5 left-1.5 bg-[#1F4D3A] text-white text-[9px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-1 shadow">
-                          <ShoppingCart size={9} />{cartItem.quantity}
+                        <span className="absolute top-2 left-2 bg-[#1F4D3A] text-white text-[10px] font-black px-2 py-1 rounded-full flex items-center gap-1 shadow-md z-10">
+                          <ShoppingCart size={10} />{cartItem.quantity}
                         </span>
                       )}
                       {/* Out of stock overlay */}
                       {!available && (
-                        <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">
-                          <span className="text-white text-[10px] font-black uppercase tracking-widest bg-rose-600/80 px-2 py-0.5 rounded-full">Sold Out</span>
+                        <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center backdrop-blur-[2px] z-10">
+                          <span className="text-white text-xs font-black uppercase tracking-widest bg-rose-600 px-3 py-1.5 rounded-full shadow-lg">Sold Out</span>
                         </div>
                       )}
                     </div>
-                    {/* Info */}
-                    <div className="flex flex-col justify-between p-2" style={{ flex: '1' }}>
-                      <div>
-                        <p className="font-black text-[11px] text-slate-900 leading-tight truncate">{product.name}</p>
-                        <p className="text-[9px] text-slate-400 font-semibold">{product.weight}kg · Slot {product.slotNumber}</p>
-                      </div>
-                      <div className="flex items-center gap-1 mt-0.5">
+                    {/* Info — 30% of card height */}
+                    <div className="flex flex-col justify-center px-3 py-2 bg-white" style={{ height: '30%' }}>
+                      <p className="font-black text-xs text-slate-900 leading-tight truncate mb-0.5">{product.name}</p>
+                      <p className="text-[10px] text-slate-500 font-semibold mb-1">{product.weight}kg · Slot {product.slotNumber}</p>
+                      <div className="flex items-center gap-1.5">
                         <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${available ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                        <span className={`text-[9px] font-bold uppercase tracking-wide ${available ? 'text-emerald-600' : 'text-rose-500'}`}>
+                        <span className={`text-[10px] font-bold uppercase tracking-wide ${available ? 'text-emerald-600' : 'text-rose-500'}`}>
                           {available ? `${product.stock} left` : 'Out of stock'}
                         </span>
                       </div>
@@ -319,12 +319,14 @@ export function ProductPage({ products, cart, onUpdateCart, onCheckout, onExit }
               onClick={e => e.stopPropagation()}
             >
               {/* Image strip */}
-              <div className="relative h-44 flex-shrink-0 bg-[#1F4D3A]">
-                <ImageWithFallback
-                  src={selectedProduct.imageUrl}
-                  alt={selectedProduct.name}
-                  className="w-full h-full object-cover opacity-75"
-                />
+              <div className="relative flex-shrink-0 bg-gradient-to-br from-[#1F4D3A] to-[#2d6b4f]" style={{ height: '240px' }}>
+                <div className="absolute inset-0 flex items-center justify-center p-8">
+                  <ImageWithFallback
+                    src={selectedProduct.imageUrl}
+                    alt={selectedProduct.name}
+                    className="max-w-full max-h-full object-contain drop-shadow-2xl"
+                  />
+                </div>
                 <button
                   onClick={() => setSelectedProduct(null)}
                   className="absolute top-4 right-4 w-8 h-8 bg-white/15 hover:bg-white/25 backdrop-blur-md text-white rounded-full flex items-center justify-center border border-white/20"

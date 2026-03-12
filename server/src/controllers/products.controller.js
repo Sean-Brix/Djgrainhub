@@ -2,12 +2,29 @@ const { prisma } = require("../lib/prisma");
 
 // ─── GET /api/machines/:machineId/products ────────────────────────────
 // Returns all products for a machine, ordered by slot number.
+// Excludes imageBlob to keep response size small; frontend will fetch
+// images separately from /api/products/:id/image when imageMimeType is present.
 async function getProductsByMachine(req, res) {
   const { machineId } = req.params;
 
   const products = await prisma.product.findMany({
     where: { machineId },
     orderBy: { slotNumber: "asc" },
+    select: {
+      id: true,
+      machineId: true,
+      slotNumber: true,
+      name: true,
+      price: true,
+      cost: true,
+      weight: true,
+      stock: true,
+      imageUrl: true,
+      imageMimeType: true, // Include this so frontend knows if blob exists
+      // imageBlob excluded - too large for list responses
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 
   return res.json(products);
@@ -15,6 +32,7 @@ async function getProductsByMachine(req, res) {
 
 // ─── POST /api/machines/:machineId/products ───────────────────────────
 // Adds a product to a specific slot on a machine.
+// Supports both imageUrl (string) and image file upload (multipart).
 async function createProduct(req, res) {
   const { machineId } = req.params;
   const { slotNumber, name, price, cost, weight, stock, imageUrl } = req.body;
@@ -33,6 +51,33 @@ async function createProduct(req, res) {
     return res.status(409).json({ error: `Slot ${slotNumber} is already occupied` });
   }
 
+  // Prepare image data from either uploaded file, base64 data URL, or regular URL
+  const imageData = {};
+  if (req.file) {
+    // Image uploaded via multipart
+    imageData.imageBlob = req.file.buffer;
+    imageData.imageMimeType = req.file.mimetype;
+    imageData.imageUrl = null; // Clear URL if file is provided
+  } else if (imageUrl) {
+    // Check if it's a base64 data URL (e.g., "data:image/jpeg;base64,...")
+    if (imageUrl.startsWith('data:image/')) {
+      // Extract base64 data and convert to buffer
+      const matches = imageUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (matches) {
+        const mimeType = `image/${matches[1]}`;
+        const base64Data = matches[2];
+        imageData.imageBlob = Buffer.from(base64Data, 'base64');
+        imageData.imageMimeType = mimeType;
+        imageData.imageUrl = null;
+      } else {
+        console.warn('Invalid data URL format for image');
+      }
+    } else {
+      // Regular URL provided
+      imageData.imageUrl = imageUrl;
+    }
+  }
+
   const product = await prisma.product.create({
     data: {
       machineId,
@@ -42,7 +87,22 @@ async function createProduct(req, res) {
       cost: parseFloat(cost),
       weight: parseFloat(weight),
       stock: stock ? parseInt(stock) : 0,
-      imageUrl: imageUrl || null,
+      ...imageData,
+    },
+    select: {
+      id: true,
+      machineId: true,
+      slotNumber: true,
+      name: true,
+      price: true,
+      cost: true,
+      weight: true,
+      stock: true,
+      imageUrl: true,
+      imageMimeType: true,
+      // imageBlob excluded from response
+      createdAt: true,
+      updatedAt: true,
     },
   });
 
@@ -51,20 +111,71 @@ async function createProduct(req, res) {
 
 // ─── PATCH /api/products/:id ──────────────────────────────────────────
 // Updates product details (name, price, cost, weight, image).
+// Supports both imageUrl (string) and image file upload (multipart).
 async function updateProduct(req, res) {
   const { id } = req.params;
   const { name, price, cost, weight, stock, imageUrl, slotNumber } = req.body;
 
+  const updateData = {
+    ...(name !== undefined && { name }),
+    ...(price !== undefined && { price: parseFloat(price) }),
+    ...(cost !== undefined && { cost: parseFloat(cost) }),
+    ...(weight !== undefined && { weight: parseFloat(weight) }),
+    ...(stock !== undefined && { stock: parseInt(stock) }),
+    ...(slotNumber !== undefined && { slotNumber: parseInt(slotNumber) }),
+  };
+
+  // Handle image upload or URL
+  if (req.file) {
+    // Image uploaded via multipart - store as blob
+    updateData.imageBlob = req.file.buffer;
+    updateData.imageMimeType = req.file.mimetype;
+    updateData.imageUrl = null; // Clear URL when file is uploaded
+  } else if (imageUrl !== undefined) {
+    // Check if it's a base64 data URL (e.g., "data:image/jpeg;base64,...")
+    if (imageUrl && imageUrl.startsWith('data:image/')) {
+      // Extract base64 data and convert to buffer
+      const matches = imageUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (matches) {
+        const mimeType = `image/${matches[1]}`;
+        const base64Data = matches[2];
+        updateData.imageBlob = Buffer.from(base64Data, 'base64');
+        updateData.imageMimeType = mimeType;
+        updateData.imageUrl = null;
+      } else {
+        // Invalid data URL format, ignore
+        console.warn('Invalid data URL format for image');
+      }
+    } else if (imageUrl) {
+      // Regular URL - store as URL
+      updateData.imageUrl = imageUrl;
+      updateData.imageBlob = null;
+      updateData.imageMimeType = null;
+    } else {
+      // Explicitly clearing image
+      updateData.imageUrl = null;
+      updateData.imageBlob = null;
+      updateData.imageMimeType = null;
+    }
+  }
+
   const product = await prisma.product.update({
     where: { id },
-    data: {
-      ...(name !== undefined && { name }),
-      ...(price !== undefined && { price: parseFloat(price) }),
-      ...(cost !== undefined && { cost: parseFloat(cost) }),
-      ...(weight !== undefined && { weight: parseFloat(weight) }),
-      ...(stock !== undefined && { stock: parseInt(stock) }),
-      ...(imageUrl !== undefined && { imageUrl }),
-      ...(slotNumber !== undefined && { slotNumber: parseInt(slotNumber) }),
+    data: updateData,
+    select: {
+      id: true,
+      machineId: true,
+      slotNumber: true,
+      name: true,
+      price: true,
+      cost: true,
+      weight: true,
+      stock: true,
+      imageUrl: true,
+      imageMimeType: true,
+      // imageBlob excluded from response
+      createdAt: true,
+      updatedAt: true,
     },
   });
 
