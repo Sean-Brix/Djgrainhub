@@ -71,8 +71,8 @@ const USERS = [
   },
   {
     id: "u4",
-    name: "Kc Sean Brix Calinao",
-    email: "kcseancalinao@gmail.com",
+    name: "System Administrator",
+    email: "admin@djgrainhub.com",
     username: "admin",
     password: "123456",
     role: "Retail Operator",

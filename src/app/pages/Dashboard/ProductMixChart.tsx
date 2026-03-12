@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { motion } from 'motion/react';
 import { Package } from 'lucide-react';
 
@@ -42,33 +42,50 @@ export const ProductMixChart: React.FC<ProductMixChartProps> = ({
           <CardDescription className="text-slate-500 font-medium">Top selling grain varieties</CardDescription>
         </CardHeader>
         <CardContent className="p-6">
-          <div className="flex flex-col items-center">
-            <div className="h-[200px] w-full relative min-h-[200px]">
+          <div className="space-y-6">
+            <div className="h-[280px] w-full relative">
               {isMounted && productData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie
-                      data={productData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={65}
-                      outerRadius={85}
-                      paddingAngle={8}
-                      dataKey="value"
-                    >
-                      {productData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart 
+                    data={productData} 
+                    layout="vertical"
+                    margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                  >
+                    <XAxis 
+                      type="number" 
+                      stroke="#94a3b8"
+                      tick={{ fill: '#64748b', fontSize: 11, fontWeight: 600 }}
+                      axisLine={{ stroke: '#e2e8f0' }}
+                    />
+                    <YAxis 
+                      type="category" 
+                      dataKey="name"
+                      stroke="#94a3b8"
+                      tick={{ fill: '#1e293b', fontSize: 12, fontWeight: 700 }}
+                      axisLine={{ stroke: '#e2e8f0' }}
+                      width={100}
+                    />
                     <Tooltip 
                       formatter={(value: number) => [`${value} pcs`, 'Quantity']}
                       contentStyle={{ 
                         borderRadius: '12px', 
                         border: 'none', 
-                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' 
+                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                        fontSize: '12px',
+                        fontWeight: 600
                       }}
+                      cursor={{ fill: 'rgba(31, 77, 58, 0.05)' }}
                     />
-                  </PieChart>
+                    <Bar 
+                      dataKey="value" 
+                      radius={[0, 8, 8, 0]}
+                      barSize={32}
+                    >
+                      {productData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
@@ -76,16 +93,12 @@ export const ProductMixChart: React.FC<ProductMixChartProps> = ({
                    <p className="text-sm font-medium tracking-tight">Data unavailable</p>
                 </div>
               )}
-              {productData.length > 0 && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="text-center">
-                    <span className="text-3xl font-black text-slate-900 tracking-tighter">{totalItems}</span>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Total</p>
-                  </div>
-                </div>
-              )}
             </div>
-            <div className="mt-6 space-y-3 w-full">
+            <div className="space-y-3 w-full pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Summary</span>
+                <span className="text-sm font-black text-slate-900">{totalItems} Total Items</span>
+              </div>
               {productData.map((item, index) => (
                 <div key={item.name} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
