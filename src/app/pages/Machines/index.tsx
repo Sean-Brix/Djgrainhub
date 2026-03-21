@@ -93,8 +93,8 @@ export function Machines() {
     <div className="space-y-6 pb-24 md:pb-6 animate-in fade-in duration-200">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">Machines</h2>
-          <p className="text-sm font-medium text-slate-500 mt-1">Manage and monitor your vending units</p>
+          <h2 className="text-3xl font-extrabold tracking-tight text-foreground">Machines</h2>
+          <p className="text-sm font-medium text-muted-foreground mt-1">Manage and monitor your vending units</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex bg-muted p-1 rounded-lg">
@@ -123,7 +123,7 @@ export function Machines() {
           placeholder="Search by name, ID or location..."
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          className="pl-9 h-11 border-slate-200 focus-visible:ring-primary/20"
+          className="pl-9 h-11 border-border focus-visible:ring-primary/20"
         />
       </div>
 

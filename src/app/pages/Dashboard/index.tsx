@@ -85,7 +85,7 @@ export function Dashboard() {
     >
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">Dashboard</h2>
+          <h2 className="text-3xl font-extrabold tracking-tight text-foreground">Dashboard</h2>
         </div>
       </div>
       

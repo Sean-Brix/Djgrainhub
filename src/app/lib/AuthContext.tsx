@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { AuthUser, AccessRole, getSession, login as authLogin, logout as authLogout, permissions } from './auth';
+import { api } from './api';
 
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
+  updateProfile: (payload: { name: string; email: string; username: string; role: string }) => Promise<AuthUser>;
   hasPermission: (check: (role: AccessRole) => boolean) => boolean;
   isSuperAdmin: boolean;
   isAdmin: boolean;
@@ -52,6 +54,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const updateProfile = useCallback(async (payload: { name: string; email: string; username: string; role: string }): Promise<AuthUser> => {
+    const updated = await api.patch<any>('/auth/me', payload);
+    const normalized: AuthUser = {
+      id: updated.id,
+      name: updated.name,
+      email: updated.email,
+      username: updated.username,
+      role: updated.role,
+      accessRole: updated.accessRole as AccessRole,
+      status: updated.status,
+      ownedMachineId: updated.ownedMachineId || '',
+    };
+    setUser(normalized);
+    return normalized;
+  }, []);
+
   const hasPermission = useCallback(
     (check: (role: AccessRole) => boolean): boolean => {
       if (!user || typeof check !== 'function') return false;
@@ -70,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         login,
         logout,
+        updateProfile,
         hasPermission,
         isSuperAdmin,
         isAdmin,
@@ -91,6 +110,9 @@ export function useAuth(): AuthContextType {
       loading: true,
       login: async () => false,
       logout: () => {},
+      updateProfile: async () => {
+        throw new Error('Auth provider not mounted');
+      },
       hasPermission: () => false,
       isSuperAdmin: false,
       isAdmin: false,

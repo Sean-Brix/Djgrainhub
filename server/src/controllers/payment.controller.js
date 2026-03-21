@@ -248,13 +248,13 @@ const handleWebhook = async (req, res) => {
 
       if (intentId) {
         try {
-          // Find the pending sale that was created when the QR was generated
+          // Confirm/complete any matching sale for this intent (legacy-safe).
           const sale = await prisma.sale.findUnique({ where: { paymentIntentId: intentId } });
           if (sale) {
             await completeSaleById(sale.id);
-            console.log(`  ↳ Sale ${sale.id} marked completed via webhook`);
+            console.log(`  ↳ Sale ${sale.id} confirmed via webhook`);
           } else {
-            console.warn(`  ↳ No pending sale found for intentId: ${intentId}`);
+            console.warn(`  ↳ No sale found for intentId: ${intentId}`);
           }
         } catch (err) {
           console.error(`  ↳ Error completing sale for intent ${intentId}:`, err.message);
@@ -268,11 +268,15 @@ const handleWebhook = async (req, res) => {
 
       if (intentId) {
         try {
-          await prisma.sale.updateMany({
+          const result = await prisma.sale.updateMany({
             where: { paymentIntentId: intentId, status: "pending" },
             data:  { status: "failed" },
           });
-          console.log(`  ↳ Sale for intent ${intentId} marked failed`);
+          if (result.count > 0) {
+            console.log(`  ↳ Legacy pending sale for intent ${intentId} marked failed`);
+          } else {
+            console.log(`  ↳ No pending sale to mark failed for intent ${intentId}`);
+          }
         } catch (err) {
           console.error(`  ↳ Error marking sale failed for intent ${intentId}:`, err.message);
         }

@@ -38,7 +38,7 @@ const STATUS_CONFIG = {
 
 export function MachineSelectPage({ machines, onSelect, onBack }: MachineSelectPageProps) {
   return (
-    <div className="fixed inset-0 bg-gradient-to-b from-[#f0faf5] to-[#e6f5ed] flex flex-col">
+    <div className="fixed inset-0 bg-gradient-to-b from-background to-muted flex flex-col">
       {/* Header */}
       <div className="bg-white border-b border-gray-100 px-5 pt-12 pb-5 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
@@ -53,9 +53,9 @@ export function MachineSelectPage({ machines, onSelect, onBack }: MachineSelectP
             <p className="text-gray-500 text-sm mt-0.5">Choose which machine this kiosk will operate as</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 bg-[#3CB371]/10 rounded-lg px-3 py-2">
-          <MonitorSmartphone size={16} className="text-[#3CB371]" />
-          <p className="text-[#2d7a52] text-xs">
+        <div className="flex items-center gap-2 bg-primary/10 rounded-lg px-3 py-2">
+          <MonitorSmartphone size={16} className="text-primary" />
+          <p className="text-primary text-xs">
             {machines.length} machine{machines.length !== 1 ? 's' : ''} available for your account
           </p>
         </div>
@@ -80,14 +80,14 @@ export function MachineSelectPage({ machines, onSelect, onBack }: MachineSelectP
                 className={`w-full text-left bg-white rounded-xl border transition-all cursor-pointer ${
                   isDisabled
                     ? 'border-gray-200 opacity-50 cursor-not-allowed'
-                    : 'border-gray-200 hover:border-[#3CB371] hover:shadow-md active:scale-[0.98]'
+                    : 'border-gray-200 hover:border-primary hover:shadow-md active:scale-[0.98]'
                 }`}
               >
                 <div className="p-4">
                   <div className="flex items-start gap-3">
                     {/* Machine Icon */}
-                    <div className={`w-11 h-11 rounded-lg ${isDisabled ? 'bg-gray-100' : 'bg-[#3CB371]/10'} flex items-center justify-center shrink-0`}>
-                      <MonitorSmartphone size={22} className={isDisabled ? 'text-gray-400' : 'text-[#3CB371]'} />
+                    <div className={`w-11 h-11 rounded-lg ${isDisabled ? 'bg-gray-100' : 'bg-primary/10'} flex items-center justify-center shrink-0`}>
+                      <MonitorSmartphone size={22} className={isDisabled ? 'text-gray-400' : 'text-primary'} />
                     </div>
 
                     {/* Info */}

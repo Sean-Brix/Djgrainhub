@@ -106,13 +106,11 @@ export const ReportsListView: React.FC<ReportsListViewProps> = ({
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         <button
-          onClick={() => setStatusFilter('all')}
           className={`bg-card border rounded-xl p-3.5 text-left transition-all cursor-pointer ${
             statusFilter === 'all' ? 'border-primary shadow-sm ring-1 ring-primary/20' : 'border-border hover:shadow-sm'
           }`}
         >
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
-            <MessageSquareWarning size={14} /><span className="text-xs">Total</span>
           </div>
           <p className="text-xl font-bold">{totalReports}</p>
         </button>

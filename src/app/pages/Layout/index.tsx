@@ -26,6 +26,7 @@ interface LayoutProps {
 
 export function Layout({ children, currentPage, onNavigate, onLogout, user }: LayoutProps) {
   const { hasPermission } = useAuth();
+  const navCurrentPage = currentPage.startsWith('settings-') ? 'settings' : currentPage;
 
   const allNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: permissions.canViewDashboard },
@@ -41,7 +42,7 @@ export function Layout({ children, currentPage, onNavigate, onLogout, user }: La
   const roleLabel = getAccessRoleLabel(user.accessRole);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-foreground">
+    <div className="min-h-screen bg-background flex flex-col md:flex-row font-sans text-foreground">
       <MobileHeader 
         user={user} 
         roleLabel={roleLabel} 
@@ -53,23 +54,27 @@ export function Layout({ children, currentPage, onNavigate, onLogout, user }: La
         user={user} 
         roleLabel={roleLabel} 
         navItems={navItems} 
-        currentPage={currentPage} 
+        currentPage={navCurrentPage} 
         onNavigate={onNavigate} 
         onLogout={onLogout} 
       />
 
-      <main className="flex-1 overflow-auto h-[calc(100vh-64px)] md:h-screen bg-[#F8FAFC]">
-        <header className="hidden md:flex justify-between items-center px-8 py-5 bg-white border-b border-border sticky top-0 z-30 shadow-[0_1px_2px_0_rgba(0,0,0,0.02)]">
+      <main className="flex-1 overflow-auto h-[calc(100vh-64px)] md:h-screen bg-background">
+        <header className="hidden md:flex justify-between items-center px-8 py-5 bg-card border-b border-border sticky top-0 z-30 shadow-[0_1px_2px_0_rgba(0,0,0,0.02)]">
           <div className="flex flex-col">
-            <h2 className="text-2xl font-bold text-slate-900 capitalize tracking-tight">
-              {navItems.find(i => i.id === currentPage)?.label || 'Dashboard'}
+            <h2 className="text-2xl font-bold text-foreground capitalize tracking-tight">
+              {currentPage === 'settings-profile'
+                ? 'Profile Settings'
+                : currentPage === 'settings-password'
+                  ? 'Password Settings'
+                  : navItems.find(i => i.id === navCurrentPage)?.label || 'Dashboard'}
             </h2>
-            <div className="text-xs text-slate-500 font-medium mt-0.5">
+            <div className="text-xs text-muted-foreground font-medium mt-0.5">
               {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
             </div>
           </div>
           <div className="flex items-center gap-4">
-             <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600">
+             <div className="flex items-center gap-2 bg-muted border border-border px-3 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground">
                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                System Online
              </div>
@@ -93,7 +98,7 @@ export function Layout({ children, currentPage, onNavigate, onLogout, user }: La
 
       <MobileBottomNav 
         navItems={navItems} 
-        currentPage={currentPage} 
+        currentPage={navCurrentPage} 
         onNavigate={onNavigate} 
       />
     </div>

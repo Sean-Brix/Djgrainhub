@@ -93,7 +93,7 @@ export const LiveMonitor: React.FC = () => {
       case 'alert': return <AlertCircle className="text-rose-500" size={14} />;
       case 'status': 
         if (severity === 'success') return <CheckCircle2 className="text-emerald-500" size={14} />;
-        return <Activity className="text-slate-400" size={14} />;
+        return <Activity className="text-muted-foreground" size={14} />;
       default: return <Signal size={14} />;
     }
   };
@@ -108,9 +108,9 @@ export const LiveMonitor: React.FC = () => {
           </CardTitle>
           <p className="text-[10px] text-muted-foreground mt-0.5">Real-time machine telemetry</p>
         </div>
-        <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-0.5 rounded-full">
+        <div className="flex items-center gap-1.5 bg-emerald-500/10 px-2 py-0.5 rounded-full">
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Live</span>
+          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Live</span>
         </div>
       </CardHeader>
       <CardContent className="p-0 flex-1 overflow-hidden relative">
@@ -127,20 +127,20 @@ export const LiveMonitor: React.FC = () => {
                 className="flex items-start gap-3 group"
               >
                 <div className="mt-1 shrink-0">
-                  <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 group-hover:bg-white group-hover:shadow-sm transition-all">
+                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center border border-border group-hover:bg-card group-hover:shadow-sm transition-all">
                     {getIcon(event.type, event.severity)}
                   </div>
                 </div>
-                <div className="flex-1 min-w-0 border-b border-slate-50 pb-3 group-last:border-0">
+                <div className="flex-1 min-w-0 border-b border-border pb-3 group-last:border-0">
                   <div className="flex items-center justify-between gap-2 mb-0.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate max-w-[120px]">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight truncate max-w-[120px]">
                       {event.machineName}
                     </span>
-                    <span className="text-[9px] text-slate-400 font-medium">
+                    <span className="text-[9px] text-muted-foreground font-medium">
                       {event.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </span>
                   </div>
-                  <p className="text-xs font-medium text-slate-700 leading-tight">
+                  <p className="text-xs font-medium text-foreground leading-tight">
                     {event.message}
                   </p>
                 </div>

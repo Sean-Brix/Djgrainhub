@@ -17,9 +17,9 @@ export const RevenuePerformanceChart: React.FC<RevenuePerformanceChartProps> = (
   return (
     <motion.div variants={itemVariants} className="col-span-full md:col-span-4">
       <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] h-full">
-        <CardHeader className="px-6 py-6 border-b border-slate-50">
-          <CardTitle className="text-xl font-bold text-slate-900">Revenue Performance</CardTitle>
-          <CardDescription className="text-slate-500 font-medium">Daily income distribution per unit</CardDescription>
+        <CardHeader className="px-6 py-6 border-b border-border">
+          <CardTitle className="text-xl font-bold text-foreground">Revenue Performance</CardTitle>
+          <CardDescription className="text-muted-foreground font-medium">Daily income distribution per unit</CardDescription>
         </CardHeader>
         <CardContent className="px-2 py-6">
           <div className="h-[300px] w-full min-h-[300px] relative">
@@ -64,7 +64,7 @@ export const RevenuePerformanceChart: React.FC<RevenuePerformanceChartProps> = (
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="w-full h-full bg-slate-50 animate-pulse rounded-xl" />
+              <div className="w-full h-full bg-muted animate-pulse rounded-xl" />
             )}
           </div>
         </CardContent>

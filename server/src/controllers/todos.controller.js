@@ -1,5 +1,14 @@
 const { prisma } = require("../lib/prisma");
 
+function machineFilter(user) {
+  if (user.accessRole === "super_admin") return {};
+  return user.ownedMachineId ? { machineId: user.ownedMachineId } : { machineId: "NONE" };
+}
+
+function canAccessMachine(user, machineId) {
+  return user.accessRole === "super_admin" || user.ownedMachineId === machineId;
+}
+
 // ─── GET /api/todos ───────────────────────────────────────────────────
 // Returns all to-do items derived from reports.
 // Supports ?completed=true|false, ?machineId=
@@ -7,6 +16,7 @@ async function getTodos(req, res) {
   const { completed, machineId } = req.query;
 
   const where = {
+    ...machineFilter(req.user),
     ...(machineId && { machineId }),
     ...(completed !== undefined && { completed: completed === "true" }),
   };
@@ -45,6 +55,9 @@ async function createTodo(req, res) {
   });
 
   if (!report) return res.status(404).json({ error: "Report not found" });
+  if (!canAccessMachine(req.user, report.machineId)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
 
   const existing = await prisma.todoItem.findUnique({ where: { reportId } });
   if (existing) {
@@ -79,6 +92,12 @@ async function updateTodo(req, res) {
   const { id } = req.params;
   const { completed, title, description } = req.body;
 
+  const existing = await prisma.todoItem.findUnique({ where: { id } });
+  if (!existing) return res.status(404).json({ error: "To-do item not found" });
+  if (!canAccessMachine(req.user, existing.machineId)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
   const todo = await prisma.todoItem.update({
     where: { id },
     data: {
@@ -94,6 +113,12 @@ async function updateTodo(req, res) {
 // ─── DELETE /api/todos/:id ────────────────────────────────────────────
 // Permanently removes a to-do item.
 async function deleteTodo(req, res) {
+  const existing = await prisma.todoItem.findUnique({ where: { id: req.params.id } });
+  if (!existing) return res.status(404).json({ error: "To-do item not found" });
+  if (!canAccessMachine(req.user, existing.machineId)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
   await prisma.todoItem.delete({ where: { id: req.params.id } });
   return res.json({ message: "To-do item deleted" });
 }

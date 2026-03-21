@@ -53,41 +53,41 @@ export function ThankYouPage({ onRestart }: ThankYouPageProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-[#F5F5F0] flex flex-col items-center justify-center p-8 select-none"
+      className="fixed inset-0 bg-background flex flex-col items-center justify-center p-8 select-none"
     >
       <motion.div 
         animate={{ y: [0, -20, 0] }}
         transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-        className="w-32 h-32 md:w-40 md:h-40 bg-[#1F4D3A] rounded-full flex items-center justify-center mb-8 md:mb-12 shadow-2xl relative z-10"
+        className="w-32 h-32 md:w-40 md:h-40 bg-primary rounded-full flex items-center justify-center mb-8 md:mb-12 shadow-2xl relative z-10"
       >
-        <CheckCircle size={64} className="text-[#C9A441]" />
+        <CheckCircle size={64} className="text-accent" />
       </motion.div>
 
-      <h1 className="text-4xl md:text-7xl font-black text-[#1F4D3A] mb-4 md:mb-8 tracking-tighter text-center uppercase">
+      <h1 className="text-4xl md:text-7xl font-black text-primary mb-4 md:mb-8 tracking-tighter text-center uppercase">
         Order Complete
       </h1>
       
-      <p className="text-lg md:text-2xl text-[#1F4D3A]/60 font-light mb-8 md:mb-16 max-w-2xl text-center px-4">
+      <p className="text-lg md:text-2xl text-primary/60 font-light mb-8 md:mb-16 max-w-2xl text-center px-4">
         Thank you for your purchase! Please collect your items from the dispenser below.
       </p>
 
       <motion.div
         animate={{ y: [0, 20, 0] }}
         transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-        className="flex flex-col items-center gap-4 text-[#C9A441] mb-12"
+        className="flex flex-col items-center gap-4 text-accent mb-12"
       >
         <ArrowDownCircle size={56} md:size={64} strokeWidth={1.5} />
         <span className="text-xs md:text-sm font-bold tracking-widest uppercase">Collect Here</span>
       </motion.div>
 
       <div className="flex flex-col items-center gap-6 mt-auto mb-8 w-full max-w-xs">
-        <div className="text-[#1F4D3A]/40 text-sm font-medium">
-          Closing in <span className="text-[#1F4D3A] font-bold">{countdown}</span> seconds
+        <div className="text-primary/40 text-sm font-medium">
+          Closing in <span className="text-primary font-bold">{countdown}</span> seconds
         </div>
         
         <button
           onClick={onRestart}
-          className="w-full bg-[#1F4D3A] text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform"
+          className="w-full bg-primary text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform"
         >
           Proceed Now
           <ArrowRight size={20} />

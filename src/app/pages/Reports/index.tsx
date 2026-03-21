@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
-import { Button } from '../../components/ui/button';
+import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   MessageSquareWarning,
   ListTodo,
 } from 'lucide-react';
 import { useAuth } from '../../lib/AuthContext';
-import { useData } from '../../lib/DataContext';
+import { api } from '../../lib/api';
 import type { Report } from '../../lib/dataHelpers';
 import { ReportsListView } from './components/ReportsListView';
 import { TodoListView } from './components/TodoListView';
@@ -24,50 +23,92 @@ export interface TodoItem {
 
 export function Reports() {
   const { user } = useAuth();
-  const data = useData();
   const [activeTab, setActiveTab] = useState<'reports' | 'todos'>('reports');
   const [todos, setTodos] = useState<TodoItem[]>([]);
 
+  const loadTodos = React.useCallback(async () => {
+    if (!user) return;
+    try {
+      const raw = await api.get<any[]>('/todos');
+      const mapped: TodoItem[] = raw.map((t: any) => ({
+        id: t.id,
+        reportId: t.reportId,
+        title: t.title,
+        description: t.description,
+        machineId: t.machineId,
+        category: t.category,
+        createdAt: t.createdAt ? new Date(t.createdAt).toISOString() : new Date().toISOString(),
+        completed: Boolean(t.completed),
+      }));
+      setTodos(mapped);
+    } catch (error) {
+      console.error('[Reports] Failed to load todos:', error);
+      toast.error('Failed to load to-do list');
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadTodos();
+  }, [loadTodos]);
+
   if (!user) return null;
 
-  const handleStatusChange = (id: string, newStatus: Report['status']) => {
-    data.updateReportStatus(id, newStatus);
-    const statusLabel = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
-    toast.success(`Report marked as ${statusLabel}`);
-  };
-
-  const handleAddTodo = (report: Report) => {
+  const handleAddTodo = async (report: Report) => {
     if (todos.some(t => t.reportId === report.id)) {
       toast.info('A to-do already exists for this report.');
       return;
     }
 
-    const contactStr = [report.name, report.mobileNumber].filter(Boolean).join(' | ');
-    const description = contactStr ? `Contact: ${contactStr}\n\n${report.message}` : report.message;
-
-    const newTodo: TodoItem = {
-      id: Math.random().toString(36).substr(2, 9),
-      reportId: report.id,
-      title: `Fix ${report.category} at ${data.getMachineName(report.machineId)}`,
-      description: description,
-      machineId: report.machineId,
-      category: report.category,
-      createdAt: new Date().toISOString(),
-      completed: false,
-    };
-
-    setTodos([newTodo, ...todos]);
-    setActiveTab('todos');
-    toast.success('Action item added to your to-do list');
+    try {
+      const created = await api.post<any>('/todos', { reportId: report.id });
+      const mapped: TodoItem = {
+        id: created.id,
+        reportId: created.reportId,
+        title: created.title,
+        description: created.description,
+        machineId: created.machineId,
+        category: created.category,
+        createdAt: created.createdAt ? new Date(created.createdAt).toISOString() : new Date().toISOString(),
+        completed: Boolean(created.completed),
+      };
+      setTodos(prev => [mapped, ...prev]);
+      setActiveTab('todos');
+      toast.success('Action item added to your to-do list');
+    } catch (error: any) {
+      if (error?.message?.toLowerCase()?.includes('already exists')) {
+        toast.info('A to-do already exists for this report.');
+        loadTodos();
+        return;
+      }
+      toast.error(error?.message || 'Failed to add to-do item');
+    }
   };
 
-  const toggleTodo = (id: string) => {
-    setTodos(todos.map(t => (t.id === id ? { ...t, completed: !t.completed } : t)));
+  const toggleTodo = async (id: string) => {
+    const current = todos.find(t => t.id === id);
+    if (!current) return;
+
+    const nextCompleted = !current.completed;
+    setTodos(prev => prev.map(t => (t.id === id ? { ...t, completed: nextCompleted } : t)));
+
+    try {
+      await api.patch(`/todos/${id}`, { completed: nextCompleted });
+    } catch (error: any) {
+      setTodos(prev => prev.map(t => (t.id === id ? { ...t, completed: current.completed } : t)));
+      toast.error(error?.message || 'Failed to update to-do');
+    }
   };
 
-  const deleteTodo = (id: string) => {
-    setTodos(todos.filter(t => t.id !== id));
-    toast.success('To-do item removed');
+  const deleteTodo = async (id: string) => {
+    const previous = todos;
+    setTodos(prev => prev.filter(t => t.id !== id));
+    try {
+      await api.delete(`/todos/${id}`);
+      toast.success('To-do item removed');
+    } catch (error: any) {
+      setTodos(previous);
+      toast.error(error?.message || 'Failed to remove to-do');
+    }
   };
 
   const pendingTodosCount = todos.filter(t => !t.completed).length;
@@ -76,8 +117,8 @@ export function Reports() {
     <div className="space-y-6 pb-24 md:pb-6 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">Support & Operations</h2>
-          <p className="text-sm font-medium text-slate-500 mt-1">Manage machine reports and maintenance tasks</p>
+          <h2 className="text-3xl font-extrabold tracking-tight text-foreground">Support & Operations</h2>
+          <p className="text-sm font-medium text-muted-foreground mt-1">Manage machine reports and maintenance tasks</p>
         </div>
       </div>
 
@@ -108,7 +149,7 @@ export function Reports() {
       </div>
 
       {activeTab === 'reports' ? (
-        <ReportsListView onAddTodo={handleAddTodo} todos={todos} onStatusChange={handleStatusChange} />
+        <ReportsListView onAddTodo={handleAddTodo} todos={todos} />
       ) : (
         <TodoListView todos={todos} onToggle={toggleTodo} onDelete={deleteTodo} />
       )}

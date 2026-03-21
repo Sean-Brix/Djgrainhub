@@ -20,7 +20,7 @@ export const InstallAppSettings: React.FC = () => {
       </CardHeader>
       <CardContent>
         {isInstalled ? (
-          <div className="flex items-center gap-3 text-sm text-emerald-600 font-medium">
+          <div className="flex items-center gap-3 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
             <CheckCircle2 className="h-5 w-5 shrink-0" />
             <div>
               <p className="font-semibold">App is installed</p>

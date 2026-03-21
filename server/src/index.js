@@ -4,8 +4,46 @@ const path = require("path");
 const dotenv = require("dotenv");
 const { router } = require("./routes");
 const { connectMqtt } = require("./lib/mqtt");
+const Layer = require("express/lib/router/layer");
 
 dotenv.config();
+
+// Ensure async route/controller rejections flow into Express error middleware.
+const originalHandleRequest = Layer.prototype.handle_request;
+Layer.prototype.handle_request = function patchedHandleRequest(req, res, next) {
+  const fn = this.handle;
+  if (fn.length > 3) {
+    return originalHandleRequest.call(this, req, res, next);
+  }
+  try {
+    const ret = fn(req, res, next);
+    if (ret && typeof ret.then === "function") {
+      ret.catch(next);
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("[uncaughtException]", error);
+});
+
+function isDatabaseUnavailable(err) {
+  if (!err) return false;
+  if (err.code === "P1001" || err.code === "P2024") return true;
+  const msg = String(err.message || "");
+  return (
+    msg.includes("Can't reach database server") ||
+    msg.includes("Error opening a TLS connection") ||
+    msg.includes("PrismaClientInitializationError") ||
+    msg.includes("root certificate which is not trusted")
+  );
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -88,6 +126,18 @@ connectMqtt();
 // Must be declared AFTER routes so Express treats it as an error middleware.
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, _next) => {
+  if (res.headersSent) {
+    return;
+  }
+
+  // Prisma / DB connectivity failures should never crash or leak stack traces.
+  if (isDatabaseUnavailable(err)) {
+    console.warn("[db-unavailable]", err.code || err.name || "unknown");
+    return res.status(503).json({
+      error: "Database is temporarily unavailable. Please try again.",
+    });
+  }
+
   // express body-parser throws this when the request body exceeds the limit
   if (err.type === "entity.too.large" || err.status === 413) {
     return res.status(413).json({

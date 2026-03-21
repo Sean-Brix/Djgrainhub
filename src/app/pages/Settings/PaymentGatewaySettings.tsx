@@ -33,7 +33,7 @@ export const PaymentGatewaySettings: React.FC = () => {
             <div className="flex items-center gap-2">
               <Label htmlFor="payment-test-mode">Payment Gateway Testing Mode</Label>
               {testMode && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
                   <FlaskConical size={11} />
                   Active
                 </span>
@@ -52,7 +52,7 @@ export const PaymentGatewaySettings: React.FC = () => {
           />
         </div>
         {testMode && (
-          <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+          <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-400">
             <p className="font-semibold mb-1">⚠ Testing Mode is ON</p>
             <p className="text-xs leading-relaxed">
               Payments will be automatically approved after a 5-second simulated delay.

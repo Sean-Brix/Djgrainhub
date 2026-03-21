@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Label } from '../../components/ui/label';
-import { Sun, Moon, Monitor } from 'lucide-react';
+import { Sun, Moon, Monitor, Sparkles } from 'lucide-react';
 import { useTheme } from '../../components/theme-provider';
 
 export const AppearanceSettings: React.FC = () => {
@@ -22,7 +22,7 @@ export const AppearanceSettings: React.FC = () => {
       <CardContent className="space-y-4">
         <div className="flex flex-col space-y-2">
           <Label>Theme</Label>
-          <div className="grid grid-cols-3 gap-2 max-w-md">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-2xl">
             <Button 
               variant={theme === 'light' ? 'default' : 'outline'} 
               className="flex flex-col items-center justify-center h-20 gap-2"
@@ -46,6 +46,14 @@ export const AppearanceSettings: React.FC = () => {
             >
               <Monitor size={20} />
               <span>System</span>
+            </Button>
+            <Button 
+              variant={theme === 'gold' ? 'default' : 'outline'} 
+              className="flex flex-col items-center justify-center h-20 gap-2"
+              onClick={() => setTheme('gold')}
+            >
+              <Sparkles size={20} />
+              <span>Gold</span>
             </Button>
           </div>
         </div>

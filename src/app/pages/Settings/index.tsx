@@ -3,11 +3,12 @@ import { useAuth } from '../../lib/AuthContext';
 import { AppearanceSettings } from './AppearanceSettings';
 import { KioskModeLauncher } from './KioskModeLauncher';
 import { InstallAppSettings } from './InstallAppSettings';
-import { ProfileSettings } from './ProfileSettings';
-import { SecuritySettings } from './SecuritySettings';
 import { NotificationSettings } from './NotificationSettings';
 import { PaymentGatewaySettings } from './PaymentGatewaySettings';
 import { AboutApp } from './AboutApp';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import { User, Shield } from 'lucide-react';
 
 interface SettingsProps {
   onNavigate: (page: string) => void;
@@ -32,8 +33,20 @@ export function Settings({ onNavigate }: SettingsProps) {
         <AppearanceSettings />
         <KioskModeLauncher onNavigate={onNavigate} />
         <PaymentGatewaySettings />
-        <ProfileSettings user={user} />
-        <SecuritySettings />
+        <Card>
+          <CardHeader>
+            <CardTitle>Account</CardTitle>
+            <CardDescription>Manage your profile information and password in dedicated pages.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Button variant="outline" className="justify-start h-11" onClick={() => onNavigate('settings-profile')}>
+              <User className="h-4 w-4 mr-2" /> Edit Profile
+            </Button>
+            <Button variant="outline" className="justify-start h-11" onClick={() => onNavigate('settings-password')}>
+              <Shield className="h-4 w-4 mr-2" /> Change Password
+            </Button>
+          </CardContent>
+        </Card>
         <NotificationSettings />
         <AboutApp logout={logout} />
       </div>

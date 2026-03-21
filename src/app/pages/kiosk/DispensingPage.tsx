@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Check, Wheat, AlertTriangle, RefreshCw } from 'lucide-react';
 import { getStoredToken } from '../../lib/auth';
-import { api } from '../../lib/api';
 
 interface CartItem {
   product: { id: string; slotNumber: number; name: string; price: number };
@@ -79,14 +78,6 @@ export function DispensingPage({ machineId, cart, saleId, onComplete }: Dispensi
       setSlotResults(data.dispenseConfirmation || {});
 
       if (data.allOk) {
-        // Fallback: ensure the sale is marked completed in the DB.
-        // The webhook should have already done this, but if it didn’t
-        // (e.g. ngrok not running in dev) this guarantees a clean record.
-        if (saleId) {
-          api.patch(`/sales/${saleId}/complete`, {}).catch(() => {
-            // Non-fatal — sale may already be completed by webhook
-          });
-        }
         setPhase('success');
         setTimeout(onComplete, 2000);
       } else {
@@ -112,7 +103,7 @@ export function DispensingPage({ machineId, cart, saleId, onComplete }: Dispensi
 
   return (
     <motion.div
-      className="fixed inset-0 flex flex-col items-center justify-center bg-[#2D6A4F] text-white z-50 overflow-hidden"
+      className="fixed inset-0 flex flex-col items-center justify-center bg-primary text-white z-50 overflow-hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -126,7 +117,7 @@ export function DispensingPage({ machineId, cart, saleId, onComplete }: Dispensi
       <motion.div
         animate={{ scale: [1.2, 1, 1.2], rotate: [0, -90, 0] }}
         transition={{ repeat: Infinity, duration: 20, ease: 'linear' }}
-        className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-[#C9A441]/10 rounded-full blur-[120px]"
+        className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-accent/10 rounded-full blur-[120px]"
       />
 
       {/* Icon area */}
@@ -134,7 +125,7 @@ export function DispensingPage({ machineId, cart, saleId, onComplete }: Dispensi
         <motion.div
           animate={isWaiting ? { scale: [1, 1.4, 1], opacity: [0.3, 0.1, 0.3] } : {}}
           transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
-          className="absolute inset-0 bg-[#C9A441]/30 rounded-full blur-2xl"
+          className="absolute inset-0 bg-accent/30 rounded-full blur-2xl"
         />
 
         <div className="w-48 h-48 border-8 border-white/10 rounded-full relative flex items-center justify-center bg-white/5 backdrop-blur-sm shadow-2xl">
@@ -153,7 +144,7 @@ export function DispensingPage({ machineId, cart, saleId, onComplete }: Dispensi
           )}
           {(phase === 'malfunction' || phase === 'error') && (
             <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-              <AlertTriangle size={80} className="text-[#C9A441]" />
+              <AlertTriangle size={80} className="text-accent" />
             </motion.div>
           )}
         </div>
@@ -169,7 +160,7 @@ export function DispensingPage({ machineId, cart, saleId, onComplete }: Dispensi
           {/* Indeterminate pulse bar */}
           <div className="w-72 h-3 bg-white/10 rounded-full overflow-hidden">
             <motion.div
-              className="h-full w-1/3 bg-gradient-to-r from-[#C9A441] to-white rounded-full"
+              className="h-full w-1/3 bg-gradient-to-r from-accent to-white rounded-full"
               animate={{ x: ['-100%', '300%'] }}
               transition={{ repeat: Infinity, duration: 1.4, ease: 'easeInOut' }}
             />
@@ -188,7 +179,7 @@ export function DispensingPage({ machineId, cart, saleId, onComplete }: Dispensi
 
       {phase === 'malfunction' && (
         <>
-          <h2 className="text-3xl font-black mb-3 tracking-tight drop-shadow-md text-[#C9A441]">
+          <h2 className="text-3xl font-black mb-3 tracking-tight drop-shadow-md text-accent">
             PARTIAL DISPENSE
           </h2>
           <p className="text-white/70 text-base font-medium text-center max-w-xs mb-4">
@@ -199,7 +190,7 @@ export function DispensingPage({ machineId, cart, saleId, onComplete }: Dispensi
               {failedSlots.map(([key, r]) => (
                 <div key={key} className="flex justify-between">
                   <span className="capitalize font-semibold">{key}</span>
-                  <span className="text-[#C9A441]">
+                  <span className="text-accent">
                     {r.ordered === 0 ? 'Unexpected dispense' : 'Failed to dispense'}
                   </span>
                 </div>
@@ -208,7 +199,7 @@ export function DispensingPage({ machineId, cart, saleId, onComplete }: Dispensi
           )}
           <button
             onClick={onComplete}
-            className="mt-2 px-8 py-3 bg-white text-[#2D6A4F] font-black rounded-full text-lg tracking-wide shadow-lg active:scale-95 transition-transform"
+            className="mt-2 px-8 py-3 bg-white text-primary font-black rounded-full text-lg tracking-wide shadow-lg active:scale-95 transition-transform"
           >
             ACKNOWLEDGE &amp; CONTINUE
           </button>
@@ -217,7 +208,7 @@ export function DispensingPage({ machineId, cart, saleId, onComplete }: Dispensi
 
       {phase === 'error' && (
         <>
-          <h2 className="text-3xl font-black mb-3 tracking-tight drop-shadow-md text-[#C9A441]">
+          <h2 className="text-3xl font-black mb-3 tracking-tight drop-shadow-md text-accent">
             MACHINE ISSUE
           </h2>
           <p className="text-white/60 text-sm text-center max-w-xs mb-6 leading-relaxed">
@@ -232,7 +223,7 @@ export function DispensingPage({ machineId, cart, saleId, onComplete }: Dispensi
             </button>
             <button
               onClick={onComplete}
-              className="px-6 py-3 bg-white text-[#2D6A4F] font-black rounded-full text-base shadow-lg active:scale-95 transition-transform"
+              className="px-6 py-3 bg-white text-primary font-black rounded-full text-base shadow-lg active:scale-95 transition-transform"
             >
               Continue Anyway
             </button>

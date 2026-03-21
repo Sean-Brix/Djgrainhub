@@ -116,8 +116,8 @@ function mapReport(r: any): Report {
     machineId: r.machineId,
     category: r.category,
     message: r.message,
-    name: r.name ?? undefined,
-    mobileNumber: r.mobileNumber ?? undefined,
+    name: r.name ?? r.reporterName ?? '',
+    mobileNumber: r.mobileNumber ?? r.reporterMobile ?? '',
     timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
     status: r.status as Report['status'],
   };
@@ -162,8 +162,8 @@ interface DataContextType {
   deleteProduct: (id: string) => void;
 
   // ── Report mutations ──
-  addReport: (report: Report) => void;
-  updateReportStatus: (id: string, status: Report['status']) => void;
+  addReport: (report: Report) => Promise<Report>;
+  updateReportStatus: (id: string, status: Report['status']) => Promise<void>;
 
   // ── Alert mutations ──
   updateAlertStatus: (id: string, status: Alert['status']) => void;
@@ -371,17 +371,32 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── Report mutations ──
-  const addReport = useCallback((report: Report) => {
+  const addReport = useCallback(async (report: Report): Promise<Report> => {
     const { machineId, category, message, name: reporterName, mobileNumber } = report;
-    api.post<any>('/reports', { machineId, category, message, name: reporterName, mobileNumber })
-      .then(created => setReports(prev => [mapReport(created), ...prev]))
-      .catch(err => console.error('[DataContext] addReport:', err));
+    const created = await api.post<any>('/reports', { machineId, category, message, reporterName, reporterMobile: mobileNumber });
+    const mapped = mapReport(created);
+    setReports(prev => [mapped, ...prev]);
+    return mapped;
   }, []);
 
-  const updateReportStatus = useCallback((id: string, status: Report['status']) => {
-    setReports(prev => prev.map(r => (r.id === id ? { ...r, status } : r)));
-    api.patch<any>(`/reports/${id}/status`, { status })
-      .catch(err => console.error('[DataContext] updateReportStatus:', err));
+  const updateReportStatus = useCallback(async (id: string, status: Report['status']): Promise<void> => {
+    let previousStatus: Report['status'] | null = null;
+    setReports(prev =>
+      prev.map(r => {
+        if (r.id !== id) return r;
+        previousStatus = r.status;
+        return { ...r, status };
+      })
+    );
+
+    try {
+      await api.patch<any>(`/reports/${id}/status`, { status });
+    } catch (err) {
+      if (previousStatus) {
+        setReports(prev => prev.map(r => (r.id === id ? { ...r, status: previousStatus as Report['status'] } : r)));
+      }
+      throw err;
+    }
   }, []);
 
   // ── Alert mutations ──
@@ -500,6 +515,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 // ─── Hook ────────────────────────────────────────────────────────────
 
 const noopVoid = () => {};
+const noopAsyncReport = async (_report: Report): Promise<Report> => _report;
+const noopAsyncVoid = async () => {};
 const emptyArr: any[] = [];
 
 /** Safe fallback for when DataProvider hasn't mounted yet (e.g. HMR / preview). */
@@ -525,8 +542,8 @@ const FALLBACK: DataContextType = {
   addProduct: noopVoid,
   updateProduct: noopVoid,
   deleteProduct: noopVoid,
-  addReport: noopVoid,
-  updateReportStatus: noopVoid,
+  addReport: noopAsyncReport,
+  updateReportStatus: noopAsyncVoid,
   updateAlertStatus: noopVoid,
   addSale: noopVoid,
   addUser: noopVoid,

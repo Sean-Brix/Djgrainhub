@@ -37,9 +37,9 @@ export const ProductMixChart: React.FC<ProductMixChartProps> = ({
   return (
     <motion.div variants={itemVariants} className="col-span-full md:col-span-3">
       <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] h-full">
-        <CardHeader className="px-6 py-6 border-b border-slate-50">
-          <CardTitle className="text-xl font-bold text-slate-900">Product Mix</CardTitle>
-          <CardDescription className="text-slate-500 font-medium">Top selling grain varieties</CardDescription>
+        <CardHeader className="px-6 py-6 border-b border-border">
+          <CardTitle className="text-xl font-bold text-foreground">Product Mix</CardTitle>
+          <CardDescription className="text-muted-foreground font-medium">Top selling grain varieties</CardDescription>
         </CardHeader>
         <CardContent className="p-6">
           <div className="space-y-6">
@@ -88,25 +88,25 @@ export const ProductMixChart: React.FC<ProductMixChartProps> = ({
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
+                <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
                    <Package className="h-12 w-12 mb-3 opacity-20" />
                    <p className="text-sm font-medium tracking-tight">Data unavailable</p>
                 </div>
               )}
             </div>
-            <div className="space-y-3 w-full pt-4 border-t border-slate-100">
+            <div className="space-y-3 w-full pt-4 border-t border-border">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Summary</span>
-                <span className="text-sm font-black text-slate-900">{totalItems} Total Items</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Summary</span>
+                <span className="text-sm font-black text-foreground">{totalItems} Total Items</span>
               </div>
               {productData.map((item, index) => (
                 <div key={item.name} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                    <span className="text-xs font-bold text-slate-700">{item.name}</span>
+                    <span className="text-xs font-bold text-foreground">{item.name}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-xs font-black text-slate-900">
+                    <span className="text-xs font-black text-foreground">
                       {totalItems > 0 ? Math.round((item.value / totalItems) * 100) : 0}%
                     </span>
                   </div>

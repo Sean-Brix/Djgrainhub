@@ -47,18 +47,18 @@ export function MobileBottomNav({ navItems, currentPage, onNavigate }: MobileBot
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: '100%', opacity: 0 }}
               transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-              className="md:hidden fixed bottom-16 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-[0_-8px_40px_-4px_rgba(0,0,0,0.15)] border-t border-slate-100"
+              className="md:hidden fixed bottom-16 left-0 right-0 z-50 bg-card rounded-t-2xl shadow-[0_-8px_40px_-4px_rgba(0,0,0,0.15)] border-t border-border"
             >
               {/* Handle */}
               <div className="flex justify-center pt-3 pb-1">
-                <div className="w-10 h-1 rounded-full bg-slate-200" />
+                <div className="w-10 h-1 rounded-full bg-muted" />
               </div>
 
               <div className="flex items-center justify-between px-5 pb-2">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">More</span>
+                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">More</span>
                 <button
                   onClick={() => setMenuOpen(false)}
-                  className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 >
                   <X size={16} />
                 </button>
@@ -74,7 +74,7 @@ export function MobileBottomNav({ navItems, currentPage, onNavigate }: MobileBot
                       className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl transition-all duration-200 ${
                         isActive
                           ? 'bg-primary/10 text-primary'
-                          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                          : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                       }`}
                     >
                       <item.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
@@ -91,7 +91,7 @@ export function MobileBottomNav({ navItems, currentPage, onNavigate }: MobileBot
       </AnimatePresence>
 
       {/* Bottom bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-slate-200 z-50 shadow-[0_-8px_20px_-6px_rgba(0,0,0,0.05)]">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-lg border-t border-border z-50 shadow-[0_-8px_20px_-6px_rgba(0,0,0,0.05)]">
         <div className="flex items-stretch h-16 pb-safe">
           {visibleItems.map((item) => {
             const isActive = currentPage === item.id;
@@ -100,7 +100,7 @@ export function MobileBottomNav({ navItems, currentPage, onNavigate }: MobileBot
                 key={item.id}
                 onClick={() => handleNavigate(item.id)}
                 className={`relative flex flex-col items-center justify-center flex-1 gap-0.5 transition-all duration-300 ${
-                  isActive ? 'text-primary' : 'text-slate-400 hover:text-slate-600'
+                  isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {isActive && (
@@ -122,7 +122,7 @@ export function MobileBottomNav({ navItems, currentPage, onNavigate }: MobileBot
             <button
               onClick={() => setMenuOpen(prev => !prev)}
               className={`relative flex flex-col items-center justify-center flex-1 gap-0.5 transition-all duration-300 ${
-                overflowIsActive || menuOpen ? 'text-primary' : 'text-slate-400 hover:text-slate-600'
+                overflowIsActive || menuOpen ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               {(overflowIsActive || menuOpen) && !menuOpen && (

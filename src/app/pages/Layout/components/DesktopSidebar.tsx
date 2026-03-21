@@ -37,9 +37,9 @@ export function DesktopSidebar({ user, roleLabel, navItems, currentPage, onNavig
             key={item.id}
             variant="ghost"
             className={`w-full justify-start gap-3 h-11 relative overflow-hidden group transition-all duration-200 ${
-              currentPage === item.id 
-                ? 'bg-white/10 text-white shadow-sm ring-1 ring-white/20' 
-                : 'text-sidebar-foreground/70 hover:bg-white/5 hover:text-white'
+              currentPage === item.id
+                ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm ring-1 ring-sidebar-border/50'
+                : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
             }`}
             onClick={() => onNavigate(item.id)}
           >

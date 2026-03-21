@@ -215,28 +215,8 @@ const PRODUCTS = [
   { id: "p6-m6", machineId: "m6", slotNumber: 6, name: "Dinorado Rice",         price: 210, cost: 135, weight: 1.0, stock:  9, imageUrl: "" },
 ];
 
-// Sales from sales.json (raw [productId, quantity, lineTotal] → items)
-const RAW_SALES = [
-  { id: "t1",  machineId: "m1", totalPrice: 1375, timestamp: "2023-10-26T10:30:00Z", status: "completed", items: [{ productId: "p1-m1", quantity: 5, unitPrice: 275 }] },
-  { id: "t2",  machineId: "m1", totalPrice:  260, timestamp: "2023-10-26T11:15:00Z", status: "completed", items: [{ productId: "p2-m1", quantity: 2, unitPrice: 130 }] },
-  { id: "t3",  machineId: "m2", totalPrice: 4000, timestamp: "2023-10-26T09:45:00Z", status: "completed", items: [{ productId: "p3-m2", quantity: 10, unitPrice: 400 }] },
-  { id: "t4",  machineId: "m1", totalPrice:   50, timestamp: "2023-10-25T16:20:00Z", status: "failed",    items: [{ productId: "p4-m1", quantity: 1, unitPrice: 50 }] },
-  { id: "t5",  machineId: "m1", totalPrice: 1375, timestamp: "2023-10-26T12:00:00Z", status: "completed", items: [{ productId: "p1-m1", quantity: 5, unitPrice: 275 }] },
-  { id: "t6",  machineId: "m1", totalPrice: 1200, timestamp: "2023-10-26T08:20:00Z", status: "completed", items: [{ productId: "p3-m1", quantity: 3, unitPrice: 400 }] },
-  { id: "t7",  machineId: "m1", totalPrice:  480, timestamp: "2023-10-26T14:10:00Z", status: "completed", items: [{ productId: "p5-m1", quantity: 2, unitPrice: 240 }] },
-  { id: "t8",  machineId: "m2", totalPrice: 3200, timestamp: "2023-10-26T07:30:00Z", status: "completed", items: [{ productId: "p3-m2", quantity: 8, unitPrice: 400 }] },
-  { id: "t9",  machineId: "m2", totalPrice:  720, timestamp: "2023-10-26T09:00:00Z", status: "completed", items: [{ productId: "p5-m2", quantity: 3, unitPrice: 240 }] },
-  { id: "t10", machineId: "m2", totalPrice:  232, timestamp: "2023-10-26T13:45:00Z", status: "completed", items: [{ productId: "p6-m2", quantity: 2, unitPrice: 116 }] },
-  { id: "t11", machineId: "m1", totalPrice: 6000, timestamp: "2023-10-26T06:15:00Z", status: "completed", items: [{ productId: "p3-m1", quantity: 15, unitPrice: 400 }] },
-  { id: "t12", machineId: "m1", totalPrice: 1375, timestamp: "2023-10-26T10:00:00Z", status: "completed", items: [{ productId: "p1-m1", quantity: 5, unitPrice: 275 }] },
-  { id: "t13", machineId: "m1", totalPrice:  150, timestamp: "2023-10-25T15:30:00Z", status: "completed", items: [{ productId: "p4-m1", quantity: 3, unitPrice: 50 }] },
-  { id: "t14", machineId: "m2", totalPrice:  100, timestamp: "2023-10-26T11:00:00Z", status: "completed", items: [{ productId: "p2-m2", quantity: 2, unitPrice: 50 }] },
-  { id: "t15", machineId: "m2", totalPrice: 1100, timestamp: "2023-10-25T14:30:00Z", status: "completed", items: [{ productId: "p1-m2", quantity: 4, unitPrice: 275 }] },
-  { id: "t16", machineId: "m1", totalPrice: 2400, timestamp: "2023-10-25T09:15:00Z", status: "completed", items: [{ productId: "p3-m1", quantity: 6, unitPrice: 400 }] },
-  { id: "t17", machineId: "m2", totalPrice: 4000, timestamp: "2023-10-24T08:00:00Z", status: "completed", items: [{ productId: "p3-m2", quantity: 10, unitPrice: 400 }] },
-  { id: "t18", machineId: "m1", totalPrice:   50, timestamp: "2023-10-26T15:20:00Z", status: "failed",    items: [{ productId: "p4-m1", quantity: 1, unitPrice: 50 }] },
-  { id: "t19", machineId: "m1", totalPrice:  680, timestamp: "2023-10-26T16:00:00Z", status: "completed", items: [{ productId: "p1-m1", quantity: 2, unitPrice: 275 }, { productId: "p2-m1", quantity: 1, unitPrice: 130 }] },
-];
+// Keep transactions empty in seed so dashboards start from live data only.
+const RAW_SALES = [];
 
 const ALERTS = [
   { id: "a1", machineId: "m2", type: "stock",       severity: "high",     message: "Low stock alert — all hoppers below 20%",                   timestamp: "2023-10-26T08:00:00Z", status: "active" },
@@ -246,18 +226,10 @@ const ALERTS = [
 ];
 
 const REPORTS = [
-  { id: "r1",  machineId: "m1", category: "Machine Jam",     message: "Rice is getting stuck in the dispensing slot. Had to press the button multiple times before anything came out. Slot 3 seems to be the problem.",                                               name: "John Doe",       mobileNumber: "0917-123-4567", timestamp: "2023-10-26T08:15:00Z", status: "open" },
-  { id: "r2",  machineId: "m2", category: "Payment Issue",   message: "GCash payment went through on my phone but the machine says payment not received. I have the receipt on my phone. Transaction ref: 7829104.",                                                  name: "Maria Santos",   mobileNumber: "0918-999-8888", timestamp: "2023-10-26T09:30:00Z", status: "open" },
-  { id: "r3",  machineId: "m1", category: "Product Quality", message: "The Organic Brown rice I bought looks discolored and has a strange smell. Doesn't seem fresh at all.",                                                                                          name: "Ricardo Gomez",  mobileNumber: "0920-111-2222", timestamp: "2023-10-25T14:45:00Z", status: "open" },
-  { id: "r4",  machineId: "m1", category: "Display Problem", message: "Screen flickers on and off every few seconds. Hard to read the product list and complete purchase.",                                                                                             name: "Elena Torres",   mobileNumber: "0921-333-4444", timestamp: "2023-10-25T11:20:00Z", status: "resolved" },
-  { id: "r5",  machineId: "m2", category: "Machine Jam",     message: "Slot 1 is completely jammed. Nothing comes out when I try to buy Premium Jasmine. Wasted my money.",                                                                                            name: "Antonio Luna",   mobileNumber: "0915-555-6666", timestamp: "2023-10-26T12:00:00Z", status: "open" },
-  { id: "r6",  machineId: "m2", category: "Other",           message: "The machine area is very dirty. There's spilled rice all over the floor and it looks unsanitary. Please clean it.",                                                                             name: "Rosa Roxas",     mobileNumber: "0916-777-8888", timestamp: "2023-10-24T16:30:00Z", status: "resolved" },
-  { id: "r7",  machineId: "m1", category: "Payment Issue",   message: "Tried to pay 3 times via GCash but keeps getting an error. The QR code on screen might be outdated.",                                                                                          name: "Juan Dela Cruz", mobileNumber: "0917-888-9999", timestamp: "2023-10-26T15:10:00Z", status: "open" },
-  { id: "r8",  machineId: "m1", category: "Machine Jam",     message: "Glutinous rice in slot 4 is not dispensing correctly. Only half the amount came out but I was charged full price.",                                                                             name: "Sofia Reyes",    mobileNumber: "0919-000-1111", timestamp: "2023-10-26T07:45:00Z", status: "open" },
-  { id: "r9",  machineId: "m2", category: "Product Quality", message: "Standard White rice has small insects in it. Very concerning. Please check all the stock immediately.",                                                                                         name: "Mateo Silva",    mobileNumber: "0922-222-3333", timestamp: "2023-10-26T10:25:00Z", status: "open" },
-  { id: "r10", machineId: "m2", category: "Display Problem", message: "Touchscreen not responding in the bottom-right area. Can't press the confirm button. Had to tap really hard.",                                                                                  name: "Liza Soberano",  mobileNumber: "0923-444-5555", timestamp: "2023-10-25T09:00:00Z", status: "open" },
-  { id: "r11", machineId: "m1", category: "Other",           message: "Can you add more rice varieties? Would love to see black rice and wild rice options.",                                                                                                          name: "Carlos Garcia",  mobileNumber: "0924-666-7777", timestamp: "2023-10-24T13:15:00Z", status: "resolved" },
-  { id: "r12", machineId: "m1", category: "Payment Issue",   message: "Machine accepted my GCash payment but dispensed the wrong rice type. I ordered Sinandomeng but got Standard White.",                                                                           name: "Isabel Dizon",   mobileNumber: "0925-888-9999", timestamp: "2023-10-26T16:40:00Z", status: "open" },
+  { id: "r1", machineId: "m1", category: "Machine Jam", message: "Dispense slot 3 jammed. Paid but no rice came out.", name: "John Doe", mobileNumber: "09171234567", timestamp: "2026-03-20T08:15:00Z", status: "open" },
+  { id: "r2", machineId: "m2", category: "Payment Issue", message: "QR payment succeeded but machine still shows pending.", name: "Maria Santos", mobileNumber: "09189998888", timestamp: "2026-03-20T09:30:00Z", status: "open" },
+  { id: "r3", machineId: "m1", category: "Display Problem", message: "Touchscreen lower-right area is not responding.", name: "Elena Torres", mobileNumber: "09213334444", timestamp: "2026-03-19T11:20:00Z", status: "open" },
+  { id: "r4", machineId: "m2", category: "Product Quality", message: "Rice from slot 2 looked stale and had odd smell.", name: "Ricardo Gomez", mobileNumber: "09201112222", timestamp: "2026-03-18T14:45:00Z", status: "resolved" },
 ];
 
 // ─── Main ─────────────────────────────────────────────────────────────
@@ -336,30 +308,10 @@ async function main() {
   console.log(`  ✓ ${PRODUCTS.length} products across ${MACHINES.length} machines`);
 
   // ── Sales + Sale Items ──────────────────────────────────────────────
-  console.log("\n🧾 Seeding sales...");
-  for (const s of RAW_SALES) {
-    await prisma.sale.upsert({
-      where: { id: s.id },
-      update: {},
-      create: {
-        id:            s.id,
-        machineId:     s.machineId,
-        paymentMethod: "GCash",
-        totalPrice:    s.totalPrice,
-        timestamp:     new Date(s.timestamp),
-        status:        s.status,
-        items: {
-          create: s.items.map(item => ({
-            productId: item.productId,
-            quantity:  item.quantity,
-            unitPrice: item.unitPrice,
-            subtotal:  item.quantity * item.unitPrice,
-          })),
-        },
-      },
-    });
-  }
-  console.log(`  ✓ ${RAW_SALES.length} sales`);
+  console.log("\n🧾 Resetting transactions...");
+  await prisma.saleItem.deleteMany({});
+  await prisma.sale.deleteMany({});
+  console.log("  ✓ Transactions cleared (0 seeded)");
 
   // ── Alerts ─────────────────────────────────────────────────────────
   console.log("\n🚨 Seeding alerts...");
@@ -382,17 +334,30 @@ async function main() {
 
   // ── Reports ────────────────────────────────────────────────────────
   console.log("\n📋 Seeding reports...");
+  await prisma.todoItem.deleteMany({});
+  await prisma.report.deleteMany({});
   for (const r of REPORTS) {
+    const reporterName = (r.name || '').trim();
+    const reporterMobile = (r.mobileNumber || '').trim();
+
     await prisma.report.upsert({
       where: { id: r.id },
-      update: {},
+      update: {
+        machineId:      r.machineId,
+        category:       r.category,
+        message:        r.message,
+        reporterName,
+        reporterMobile,
+        timestamp:      new Date(r.timestamp),
+        status:         r.status,
+      },
       create: {
         id:             r.id,
         machineId:      r.machineId,
         category:       r.category,
         message:        r.message,
-        reporterName:   r.name ?? null,
-        reporterMobile: r.mobileNumber ?? null,
+        reporterName,
+        reporterMobile,
         timestamp:      new Date(r.timestamp),
         status:         r.status,
       },

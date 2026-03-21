@@ -69,21 +69,24 @@ async function getSaleById(req, res) {
 // ─── POST /api/sales ──────────────────────────────────────────────────
 // Creates a new sale from the kiosk checkout flow.
 // Body: { machineId, paymentMethod, items: [{ productId, quantity, unitPrice }],
-//         status?: "pending"|"completed", paymentIntentId?: string }
+//         status?: "completed", paymentIntentId?: string }
 //
-// When status is "pending" (default for kiosk) stock is NOT yet decremented —
-// that happens in completeSale() once the webhook confirms payment.
+// Pending sales are not allowed. A sale is persisted only after payment succeeds.
 async function createSale(req, res) {
   const {
     machineId,
     paymentMethod = "QR PH",
     items,
-    status = "pending",
+    status = "completed",
     paymentIntentId = null,
   } = req.body;
 
   if (!machineId || !items || items.length === 0) {
     return res.status(400).json({ error: "machineId and items are required" });
+  }
+
+  if (status !== "completed") {
+    return res.status(400).json({ error: "Only completed sales can be recorded" });
   }
 
   // Validate all products exist
@@ -101,7 +104,7 @@ async function createSale(req, res) {
     0
   );
 
-  // Create the sale record (pending or completed)
+  // Create only completed sale records.
   const sale = await prisma.$transaction(async (tx) => {
     const newSale = await tx.sale.create({
       data: {
@@ -122,18 +125,15 @@ async function createSale(req, res) {
       include: { items: true },
     });
 
-    // Only decrement stock & update earnings immediately if already completed
-    if (status === "completed") {
-      for (const item of items) {
-        const product = products.find((p) => p.id === item.productId);
-        const newStock = Math.max(0, product.stock - item.quantity);
-        await tx.product.update({ where: { id: item.productId }, data: { stock: newStock } });
-      }
-      await tx.machine.update({
-        where: { id: machineId },
-        data: { earnings: { increment: totalPrice } },
-      });
+    for (const item of items) {
+      const product = products.find((p) => p.id === item.productId);
+      const newStock = Math.max(0, product.stock - item.quantity);
+      await tx.product.update({ where: { id: item.productId }, data: { stock: newStock } });
     }
+    await tx.machine.update({
+      where: { id: machineId },
+      data: { earnings: { increment: totalPrice } },
+    });
 
     return newSale;
   });

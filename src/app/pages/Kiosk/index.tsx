@@ -56,9 +56,7 @@ export default function Kiosk({ onExit }: { onExit?: () => void }) {
     setStep('processing');
   };
   const handleProcessComplete = () => {
-    // Sale record + stock decrement are handled server-side:
-    //   • Webhook (payment.paid) completes the sale when PayMongo confirms
-    //   • DispensingPage calls PATCH /api/sales/:id/complete as a fallback
+    // Sale is created only after confirmed payment (no pending records).
     setStep('dispensing');
   };
   const handleDispenseComplete = () => setStep('receipt');

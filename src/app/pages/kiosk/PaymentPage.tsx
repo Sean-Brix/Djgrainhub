@@ -30,7 +30,6 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
   const [elapsed, setElapsed] = useState(0);
   const [testCountdown, setTestCountdown] = useState(5);
   const intentIdRef = useRef<string | null>(null);
-  const saleIdRef   = useRef<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -50,18 +49,6 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
     // ── TEST MODE: skip PayMongo, auto-succeed after 5 s ──────────────────
     if (isTestMode) {
       try {
-        const saleData = await api.post<any>('/sales', {
-          machineId,
-          paymentMethod: 'QR PH (Test)',
-          status: 'pending',
-          paymentIntentId: null,
-          items: cart.map(item => ({
-            productId: item.product.id,
-            quantity:  item.quantity,
-            unitPrice: item.product.price,
-          })),
-        });
-        saleIdRef.current = saleData?.id ?? null;
         setPhase('ready');
 
         let remaining = 5;
@@ -71,11 +58,29 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
           setTestCountdown(remaining);
           if (remaining <= 0) {
             stopPolling();
-            onSuccess(saleIdRef.current ?? '');
+            (async () => {
+              try {
+                const saleData = await api.post<any>('/sales', {
+                  machineId,
+                  paymentMethod: 'QR PH (Test)',
+                  status: 'completed',
+                  paymentIntentId: null,
+                  items: cart.map(item => ({
+                    productId: item.product.id,
+                    quantity: item.quantity,
+                    unitPrice: item.product.price,
+                  })),
+                });
+                onSuccess(saleData?.id ?? '');
+              } catch (err: any) {
+                setErrorMsg(err?.message || 'Failed to save completed test transaction');
+                setPhase('error');
+              }
+            })();
           }
         }, 1000);
       } catch (e: any) {
-        setErrorMsg(e.message || 'Failed to create test sale');
+        setErrorMsg(e.message || 'Failed to initialize test payment');
         setPhase('error');
       }
       return;
@@ -93,26 +98,11 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
       const clientKey = intentData?.data?.attributes?.client_key;
       intentIdRef.current = id;
 
-      // 2. Create pending sale record — links this transaction to the intent
-      //    The webhook will mark it completed once PayMongo confirms payment.
-      const saleData = await api.post<any>('/sales', {
-        machineId,
-        paymentMethod: 'QR PH',
-        status: 'pending',
-        paymentIntentId: id,
-        items: cart.map(item => ({
-          productId: item.product.id,
-          quantity:  item.quantity,
-          unitPrice: item.product.price,
-        })),
-      });
-      saleIdRef.current = saleData?.id ?? null;
-
-      // 3. Create qrph payment method
+      // 2. Create qrph payment method
       const methodData = await api.post<any>('/payment/method', { type: 'qrph' });
       const methodId   = methodData?.data?.id;
 
-      // 4. Attach → get QR image
+      // 3. Attach → get QR image
       const attachData = await api.post<any>(`/payment/intent/${id}/attach`, {
         payment_method_id: methodId,
         client_key: clientKey,
@@ -123,14 +113,30 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
       setQrUrl(imageUrl);
       setPhase('ready');
 
-      // 5. Poll PayMongo every 3s for payment confirmation
+      // 4. Poll PayMongo every 3s for payment confirmation
       pollRef.current = setInterval(async () => {
         try {
           const status = await api.get<any>(`/payment/intent/${id}`);
           const s = status?.data?.attributes?.status;
           if (s === 'succeeded') {
             stopPolling();
-            onSuccess(saleIdRef.current ?? '');
+            try {
+              const saleData = await api.post<any>('/sales', {
+                machineId,
+                paymentMethod: 'QR PH',
+                status: 'completed',
+                paymentIntentId: id,
+                items: cart.map(item => ({
+                  productId: item.product.id,
+                  quantity: item.quantity,
+                  unitPrice: item.product.price,
+                })),
+              });
+              onSuccess(saleData?.id ?? '');
+            } catch (err: any) {
+              setErrorMsg(err?.message || 'Payment succeeded but saving transaction failed');
+              setPhase('error');
+            }
           } else if (s === 'failed') {
             stopPolling();
             setErrorMsg('Payment failed. Please try again.');
@@ -160,9 +166,9 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="flex flex-col h-full bg-[#F5F5F0] text-[#1F4D3A]"
+      className="flex flex-col h-full bg-background text-primary"
     >
-      <header className="bg-[#1F4D3A] text-white p-4 flex items-center shadow-md z-10">
+      <header className="bg-primary text-white p-4 flex items-center shadow-md z-10">
         <Button variant="ghost" onClick={onBack} className="text-white hover:bg-white/10 mr-4">
           <ChevronLeft className="mr-2" /> Back
         </Button>
@@ -170,12 +176,12 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
       </header>
 
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-        <Card className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full border-2 border-[#1F4D3A]/10">
+        <Card className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full border-2 border-primary/10">
           <div className="mb-6">
             <h2 className="text-2xl font-bold mb-1">
               {isTestMode ? 'Test Payment' : 'Scan to Pay'}
             </h2>
-            <p className="text-[#1F4D3A]/60 text-sm">
+            <p className="text-primary/60 text-sm">
               {isTestMode
                 ? 'Testing mode is active — payment will be simulated'
                 : 'Use GCash, Maya, or any QR Ph\u2011enabled app'}
@@ -183,15 +189,15 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
           </div>
 
           {/* QR area */}
-          <div className="bg-[#1F4D3A]/5 p-6 rounded-2xl mb-6 flex items-center justify-center relative min-h-[220px]">
+          <div className="bg-primary/5 p-6 rounded-2xl mb-6 flex items-center justify-center relative min-h-[220px]">
             {/* Corner brackets */}
-            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#1F4D3A] rounded-tl-xl -mt-1 -ml-1" />
-            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#1F4D3A] rounded-tr-xl -mt-1 -mr-1" />
-            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[#1F4D3A] rounded-bl-xl -mb-1 -ml-1" />
-            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[#1F4D3A] rounded-br-xl -mb-1 -mr-1" />
+            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-xl -mt-1 -ml-1" />
+            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-xl -mt-1 -mr-1" />
+            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-xl -mb-1 -ml-1" />
+            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-xl -mb-1 -mr-1" />
 
             {phase === 'generating' && (
-              <div className="flex flex-col items-center gap-3 text-[#1F4D3A]/60">
+              <div className="flex flex-col items-center gap-3 text-primary/60">
                 <Loader2 size={40} className="animate-spin" />
                 <p className="text-sm font-medium">
                   {isTestMode ? 'Setting up test payment\u2026' : 'Generating QR code\u2026'}
@@ -201,7 +207,7 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
 
             {/* Test-mode countdown display */}
             {isTestMode && phase === 'ready' && (
-              <div className="flex flex-col items-center gap-4 text-[#1F4D3A]">
+              <div className="flex flex-col items-center gap-4 text-primary">
                 <div className="relative flex items-center justify-center w-28 h-28">
                   <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
                     <circle cx="50" cy="50" r="44" fill="none" stroke="#1F4D3A" strokeOpacity="0.1" strokeWidth="8" />
@@ -243,9 +249,9 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
           </div>
 
           {/* Amount */}
-          <div className="flex items-center justify-between bg-[#F5F5F0] p-4 rounded-xl mb-5">
-            <span className="font-medium text-[#1F4D3A]/70">Total Amount</span>
-            <span className="text-3xl font-black text-[#1F4D3A]">₱{totalAmount.toLocaleString()}</span>
+          <div className="flex items-center justify-between bg-background p-4 rounded-xl mb-5">
+            <span className="font-medium text-primary/70">Total Amount</span>
+            <span className="text-3xl font-black text-primary">₱{totalAmount.toLocaleString()}</span>
           </div>
 
           {/* Status */}
@@ -256,13 +262,13 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
             </div>
           )}
           {!isTestMode && phase === 'ready' && (
-            <div className="flex items-center justify-center gap-2 text-sm text-[#1F4D3A]/50">
+            <div className="flex items-center justify-center gap-2 text-sm text-primary/50">
               <Smartphone size={15} className="animate-pulse" />
               <span>Waiting for payment\u2026 <span className="font-mono">{minutes}:{seconds}</span></span>
             </div>
           )}
           {phase === 'generating' && (
-            <div className="flex items-center justify-center gap-2 text-sm text-[#1F4D3A]/40">
+            <div className="flex items-center justify-center gap-2 text-sm text-primary/40">
               <QrCode size={15} />
               <span>{isTestMode ? 'Preparing test mode\u2026' : 'Connecting to PayMongo\u2026'}</span>
             </div>

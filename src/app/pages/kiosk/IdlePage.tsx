@@ -11,7 +11,7 @@ interface IdlePageProps {
   machineId?: string;
 }
 
-const BACKGROUND_COLORS = ['#1F4D3A', '#153428', '#2d8f5e']; // Deep, premium grain greens
+const BACKGROUND_COLORS = [`var(--primary)`, `var(--secondary)`, `var(--muted)`]; // Deep, premium grain greens
 
 export function IdlePage({ onStart, onAdminExit, machineId }: IdlePageProps) {
   const { addReport } = useData();
@@ -33,6 +33,7 @@ export function IdlePage({ onStart, onAdminExit, machineId }: IdlePageProps) {
   const [reportMobile, setReportMobile] = useState('');
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
+  const [reportError, setReportError] = useState('');
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const reportTextRef = useRef<HTMLTextAreaElement>(null);
 
@@ -99,35 +100,62 @@ export function IdlePage({ onStart, onAdminExit, machineId }: IdlePageProps) {
     setReportName('');
     setReportMobile('');
     setReportSubmitted(false);
+    setReportError('');
     setShowCategoryDropdown(false);
   };
 
   const handleReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const normalizedName = reportName.trim();
+    const normalizedMobile = reportMobile.trim();
+    const normalizedMessage = reportMessage.trim();
+    const mobileDigits = (normalizedMobile.match(/\d/g) || []).length;
+
+    if (!reportCategory || !normalizedName || !normalizedMobile || !normalizedMessage) {
+      setReportError('All fields are required.');
+      return;
+    }
+
+    if (mobileDigits < 10) {
+      setReportError('Please enter a valid mobile number (at least 10 digits).');
+      return;
+    }
+
     setReportSubmitting(true);
+    setReportError('');
 
-    await new Promise(r => setTimeout(r, 1200));
+    try {
+      if (!machineId) {
+        throw new Error('No kiosk machine selected');
+      }
 
-    setReportSubmitting(false);
-    setReportSubmitted(true);
-
-    if (machineId) {
-      addReport({
+      await addReport({
         id: `rpt-kiosk-${Date.now()}`,
-        machineId: machineId,
+        machineId,
         category: reportCategory,
-        message: reportMessage,
-        name: reportName,
-        mobileNumber: reportMobile,
+        message: normalizedMessage,
+        name: normalizedName,
+        mobileNumber: normalizedMobile,
         timestamp: new Date().toISOString(),
         status: 'open',
       });
-    }
 
-    setTimeout(() => {
-      setShowReportModal(false);
-      setReportSubmitted(false);
-    }, 2500);
+      setReportSubmitted(true);
+      setTimeout(() => {
+        setShowReportModal(false);
+        setReportSubmitted(false);
+      }, 2500);
+    } catch (error) {
+      console.error('[Kiosk] Failed to submit report:', error);
+      const message = error instanceof Error ? error.message : '';
+      if (message) {
+        setReportError(message);
+      } else {
+        setReportError('Unable to send report right now. Please try again.');
+      }
+    } finally {
+      setReportSubmitting(false);
+    }
   };
 
   const handleReportBackdropClick = (e: React.MouseEvent) => {
@@ -160,7 +188,7 @@ export function IdlePage({ onStart, onAdminExit, machineId }: IdlePageProps) {
           className="p-3 bg-white/5 backdrop-blur-md rounded-2xl opacity-40 hover:opacity-100 hover:bg-white/15 transition-all cursor-pointer border border-white/10 shadow-lg"
           title="Report an Issue"
         >
-          <MessageSquareWarning size={22} className="text-[#D4AF37]" />
+          <MessageSquareWarning size={22} className="text-accent" />
         </button>
         <button 
           onClick={handleAdminClick} 
@@ -416,6 +444,10 @@ export function IdlePage({ onStart, onAdminExit, machineId }: IdlePageProps) {
                           />
                         </div>
 
+                        {reportError && (
+                          <p className="text-red-500 text-[1.2vh] font-bold px-1">{reportError}</p>
+                        )}
+
                           <button
                             type="submit"
                             disabled={reportSubmitting || !reportCategory || !reportMessage.trim() || !reportName.trim() || !reportMobile.trim()}
@@ -465,7 +497,7 @@ export function IdlePage({ onStart, onAdminExit, machineId }: IdlePageProps) {
               ease: "easeInOut",
               delay: grain.delay
             }}
-            className="absolute bg-[#D4AF37]/40 blur-[0.5px]"
+            className="absolute bg-accent/40 blur-[0.5px]"
           />
         ))}
         
@@ -477,7 +509,7 @@ export function IdlePage({ onStart, onAdminExit, machineId }: IdlePageProps) {
             opacity: [0.1, 0.3, 0.1]
           }}
           transition={{ repeat: Infinity, duration: 20, ease: "easeInOut" }}
-          className="absolute top-[-20%] left-[-20%] w-[80%] h-[80%] bg-[#D4AF37] rounded-full blur-[140px]"
+          className="absolute top-[-20%] left-[-20%] w-[80%] h-[80%] bg-accent rounded-full blur-[140px]"
         />
         <motion.div 
           animate={{ 
@@ -512,8 +544,8 @@ export function IdlePage({ onStart, onAdminExit, machineId }: IdlePageProps) {
             />
             
             {/* Corner Accents */}
-            <div className="absolute top-[8%] left-[8%] w-[12%] h-[12%] border-t-2 border-l-2 border-[#D4AF37]/40 rounded-tl-xl" />
-            <div className="absolute bottom-[8%] right-[8%] w-[12%] h-[12%] border-b-2 border-r-2 border-[#D4AF37]/40 rounded-br-xl" />
+            <div className="absolute top-[8%] left-[8%] w-[12%] h-[12%] border-t-2 border-l-2 border-accent/40 rounded-tl-xl" />
+            <div className="absolute bottom-[8%] right-[8%] w-[12%] h-[12%] border-b-2 border-r-2 border-accent/40 rounded-br-xl" />
           </div>
           
           {/* External decorative rings */}
@@ -538,7 +570,7 @@ export function IdlePage({ onStart, onAdminExit, machineId }: IdlePageProps) {
             className="text-[5vh] sm:text-[7vh] md:text-[9vh] font-black tracking-tighter leading-none"
           >
             <span className="text-white block">FRESHLY</span>
-            <span className="text-[#D4AF37]">MILLED RICE</span>
+            <span className="text-accent">MILLED RICE</span>
           </motion.h1>
           <motion.p 
             initial={{ opacity: 0 }}
@@ -563,8 +595,8 @@ export function IdlePage({ onStart, onAdminExit, machineId }: IdlePageProps) {
               transition={{ repeat: Infinity, duration: 2.5, ease: "easeOut" }}
               className="absolute inset-0 bg-white/20 rounded-full"
             />
-            <div className="w-[7vh] h-[7vh] sm:w-[9vh] sm:h-[9vh] bg-[#D4AF37] rounded-[20%] flex items-center justify-center shadow-2xl relative z-10 hover:scale-110 transition-transform">
-              <Hand className="text-[#1F4D3A] w-[50%] h-[50%]" />
+            <div className="w-[7vh] h-[7vh] sm:w-[9vh] sm:h-[9vh] bg-accent rounded-[20%] flex items-center justify-center shadow-2xl relative z-10 hover:scale-110 transition-transform">
+              <Hand className="text-primary w-[50%] h-[50%]" />
             </div>
           </div>
           <div className="text-center">

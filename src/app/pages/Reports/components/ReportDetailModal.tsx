@@ -55,7 +55,6 @@ export const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
 interface ReportDetailModalProps {
   report: Report;
   onClose: () => void;
-  onStatusChange: (id: string, status: Report['status']) => void;
   onAddTodo: (report: Report) => void;
   hasTodo: boolean;
 }
@@ -63,7 +62,6 @@ interface ReportDetailModalProps {
 export const ReportDetailModal: React.FC<ReportDetailModalProps> = ({
   report,
   onClose,
-  onStatusChange,
   onAddTodo,
   hasTodo,
 }) => {
@@ -155,25 +153,6 @@ export const ReportDetailModal: React.FC<ReportDetailModalProps> = ({
                   onClick={() => { onAddTodo(report); onClose(); }}
                 >
                   <Plus size={14} className="mr-1.5" /> Add To-Do
-                </Button>
-              )}
-              {report.status !== 'resolved' && (
-                <Button
-                  size="sm"
-                  className="flex-1 min-w-[120px] bg-green-600 hover:bg-green-700 text-white"
-                  onClick={() => onStatusChange(report.id, 'resolved')}
-                >
-                  <CheckCircle2 size={14} className="mr-1.5" /> Resolve
-                </Button>
-              )}
-              {report.status === 'resolved' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 min-w-[120px] border-red-200 text-red-700 hover:bg-red-50"
-                  onClick={() => onStatusChange(report.id, 'open')}
-                >
-                  <AlertCircle size={14} className="mr-1.5" /> Reopen
                 </Button>
               )}
             </div>

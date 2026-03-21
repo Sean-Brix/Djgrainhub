@@ -80,8 +80,8 @@ export interface Report {
   machineId: string;
   category: string;
   message: string;
-  name?: string;
-  mobileNumber?: string;
+  name: string;
+  mobileNumber: string;
   timestamp: string;
   status: 'open' | 'resolved';
 }

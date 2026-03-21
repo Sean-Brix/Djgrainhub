@@ -4,6 +4,8 @@ import { Dashboard } from '@/app/pages/Dashboard/index';
 import { Machines } from '@/app/pages/Machines/index';
 import { Transactions } from '@/app/pages/Transactions/index';
 import { Settings } from '@/app/pages/Settings/index';
+import { ProfileSettingsPage } from '@/app/pages/Settings/ProfileSettingsPage';
+import { PasswordSettingsPage } from '@/app/pages/Settings/PasswordSettingsPage';
 import { Reports } from '@/app/pages/Reports/index';
 import Kiosk from '@/app/pages/Kiosk/index';
 import { Login } from '@/app/pages/Login/index';
@@ -62,6 +64,10 @@ export function AppContent() {
         return <Reports />;
       case 'settings':
         return <Settings onNavigate={setCurrentPage} />;
+      case 'settings-profile':
+        return <ProfileSettingsPage onNavigate={setCurrentPage} />;
+      case 'settings-password':
+        return <PasswordSettingsPage onNavigate={setCurrentPage} />;
       case 'dev-paymongo':
         return <DevPayMongo />;
       case 'dev-mqtt':

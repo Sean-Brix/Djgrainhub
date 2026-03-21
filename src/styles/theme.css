@@ -78,6 +78,45 @@
   --sidebar-ring: #C9A441;
 }
 
+.gold {
+  --background: #FDFBF7;
+  --foreground: #4A3C13;
+  --card: #FFFFFF;
+  --card-foreground: #4A3C13;
+  --popover: #FFFFFF;
+  --popover-foreground: #4A3C13;
+  --primary: #D4AF37;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F6EDD0;
+  --secondary-foreground: #4A3C13;
+  --muted: #F6EDD0;
+  --muted-foreground: #8C7326;
+  --accent: #EFE4BD;
+  --accent-foreground: #4A3C13;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #E8D8A1;
+  --input: #E8D8A1;
+  --input-background: #FFFFFF;
+  --switch-background: #E8D8A1;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #D4AF37;
+  --chart-1: #D4AF37;
+  --chart-2: #8C7326;
+  --chart-3: #EFE4BD;
+  --chart-4: #4A3C13;
+  --chart-5: #B89C3A;
+  --sidebar: #FAF5E6;
+  --sidebar-foreground: #4A3C13;
+  --sidebar-primary: #D4AF37;
+  --sidebar-primary-foreground: #4A3C13;
+  --sidebar-accent: #EFE4BD;
+  --sidebar-accent-foreground: #4A3C13;
+  --sidebar-border: #E8D8A1;
+  --sidebar-ring: #D4AF37;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
