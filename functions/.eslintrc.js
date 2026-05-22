@@ -4,23 +4,19 @@ module.exports = {
     node: true,
   },
   parserOptions: {
-    "ecmaVersion": 2018,
+    ecmaVersion: 2022,
   },
   extends: [
     "eslint:recommended",
-    "google",
   ],
   rules: {
-    "no-restricted-globals": ["error", "name", "length"],
-    "prefer-arrow-callback": "error",
-    "quotes": ["error", "double", {"allowTemplateLiterals": true}],
+    "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+    "no-console": "off",
   },
   overrides: [
     {
       files: ["**/*.spec.*"],
-      env: {
-        mocha: true,
-      },
+      env: { mocha: true },
       rules: {},
     },
   ],

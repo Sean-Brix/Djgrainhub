@@ -213,7 +213,7 @@ const handleWebhook = async (req, res) => {
     // Header format: "t=<timestamp>,te=<hmac_sha256>"
     const parts = Object.fromEntries(sigHeader.split(",").map((p) => p.split("=")));
     const timestamp = parts["t"];
-    const receivedSig = parts["te"];
+    const receivedSig = parts.li || parts.te;
 
     // Payload to sign: "<timestamp>.<raw json body>"
     const rawBody = typeof req.rawBody === "string" ? req.rawBody : JSON.stringify(req.body);
