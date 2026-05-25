@@ -1,6 +1,9 @@
 const crypto = require("crypto");
 const { db } = require("../lib/db");
-const { completeSaleById } = require("./sales.controller");
+const {
+  completeSaleById,
+  failSaleByPaymentIntentId,
+} = require("./sales.controller");
 
 const PAYMONGO_BASE = "https://api.paymongo.com/v1";
 
@@ -27,6 +30,114 @@ async function pmFetch(method, path, body = null) {
 
 // In-memory webhook log (dev/debug — resets on cold start)
 const webhookLog = [];
+
+function parseSignatureHeader(header) {
+  return String(header || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((acc, part) => {
+      const separator = part.indexOf("=");
+      if (separator === -1) return acc;
+      acc[part.slice(0, separator)] = part.slice(separator + 1);
+      return acc;
+    }, {});
+}
+
+function timingSafeHexEqual(received, expected) {
+  if (!/^[a-f0-9]+$/i.test(received || "") || !/^[a-f0-9]+$/i.test(expected || "")) {
+    return false;
+  }
+
+  const receivedBuffer = Buffer.from(received, "hex");
+  const expectedBuffer = Buffer.from(expected, "hex");
+  return (
+    receivedBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(receivedBuffer, expectedBuffer)
+  );
+}
+
+function verifyWebhookSignature(req) {
+  const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return {
+      ok: process.env.NODE_ENV !== "production",
+      status: 500,
+      error: "Webhook secret is not configured",
+    };
+  }
+
+  const sigHeader = req.headers["paymongo-signature"];
+  if (!sigHeader) {
+    return { ok: false, status: 400, error: "Missing signature" };
+  }
+
+  const parts = parseSignatureHeader(sigHeader);
+  const timestamp = parts.t;
+  const isLiveEvent = req.body?.data?.attributes?.livemode === true;
+  const receivedSig = (isLiveEvent ? parts.li : parts.te) || parts.li || parts.te;
+
+  if (!timestamp || !receivedSig) {
+    return { ok: false, status: 400, error: "Invalid signature header" };
+  }
+
+  if (typeof req.rawBody !== "string") {
+    return { ok: false, status: 400, error: "Raw body unavailable" };
+  }
+
+  const expected = crypto
+    .createHmac("sha256", webhookSecret)
+    .update(`${timestamp}.${req.rawBody}`)
+    .digest("hex");
+
+  if (!timingSafeHexEqual(receivedSig, expected)) {
+    return { ok: false, status: 400, error: "Invalid signature" };
+  }
+
+  return { ok: true };
+}
+
+async function findSaleByPaymentIntentId(intentId) {
+  const snap = await db.collection("sales")
+    .where("paymentIntentId", "==", intentId)
+    .limit(1)
+    .get();
+
+  return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+}
+
+async function completeSaleForPaidIntent(intentId, paidAmount) {
+  if (!intentId) return;
+
+  const sale = await findSaleByPaymentIntentId(intentId);
+  if (!sale) {
+    console.warn(`  -> No sale found for intentId: ${intentId}`);
+    return;
+  }
+
+  const paidCentavos = Number(paidAmount);
+  const expectedCentavos = Math.round(Number(sale.totalPrice) * 100);
+  if (Number.isFinite(paidCentavos) && paidCentavos !== expectedCentavos) {
+    console.error(
+      `  -> Amount mismatch for sale ${sale.id}: paid ${paidCentavos}, expected ${expectedCentavos}`
+    );
+    return;
+  }
+
+  await completeSaleById(sale.id);
+  console.log(`  -> Sale ${sale.id} confirmed via webhook`);
+}
+
+async function markSaleFailedForIntent(intentId) {
+  if (!intentId) return;
+
+  const result = await failSaleByPaymentIntentId(intentId);
+  if (result.count > 0) {
+    console.log(`  -> Pending sale for intent ${intentId} marked failed`);
+  } else {
+    console.log(`  -> No pending sale to mark failed for intent ${intentId}`);
+  }
+}
 
 // ─── POST /api/payment/intent ─────────────────────────────────────────
 const createPaymentIntent = async (req, res) => {
@@ -123,6 +234,12 @@ const getPaymentLink = async (req, res) => {
 
 // ─── POST /api/payment/webhook ────────────────────────────────────────
 const handleWebhook = async (req, res) => {
+  const signature = verifyWebhookSignature(req);
+  if (!signature.ok) {
+    console.warn(`[PayMongo] ${signature.error} - rejected`);
+    return res.status(signature.status).json({ error: signature.error });
+  }
+
   const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
   if (webhookSecret) {
     const sigHeader = req.headers["paymongo-signature"];
@@ -150,17 +267,24 @@ const handleWebhook = async (req, res) => {
   switch (type) {
     case "payment.paid": {
       const intentId = event?.data?.attributes?.data?.attributes?.payment_intent_id;
+      const paidAmount = event?.data?.attributes?.data?.attributes?.amount;
       if (intentId) {
         try {
-          const snap = await db.collection("sales").where("paymentIntentId", "==", intentId).limit(1).get();
-          if (!snap.empty) {
-            await completeSaleById(snap.docs[0].id);
-            console.log(`  ↳ Sale ${snap.docs[0].id} confirmed via webhook`);
-          } else {
-            console.warn(`  ↳ No sale found for intentId: ${intentId}`);
-          }
+          await completeSaleForPaidIntent(intentId, paidAmount);
         } catch (err) {
-          console.error(`  ↳ Error completing sale for intent ${intentId}:`, err.message);
+          console.error(`  -> Error completing sale for intent ${intentId}:`, err.message);
+        }
+      }
+      break;
+    }
+    case "payment_intent.succeeded": {
+      const intentId = event?.data?.attributes?.data?.id;
+      const amount = event?.data?.attributes?.data?.attributes?.amount;
+      if (intentId) {
+        try {
+          await completeSaleForPaidIntent(intentId, amount);
+        } catch (err) {
+          console.error(`  -> Error completing sale for intent ${intentId}:`, err.message);
         }
       }
       break;
@@ -169,15 +293,20 @@ const handleWebhook = async (req, res) => {
       const intentId = event?.data?.attributes?.data?.attributes?.payment_intent_id;
       if (intentId) {
         try {
-          const snap = await db.collection("sales")
-            .where("paymentIntentId", "==", intentId)
-            .where("status", "==", "pending")
-            .get();
-          const batch = db.batch();
-          snap.docs.forEach((d) => batch.update(d.ref, { status: "failed" }));
-          await batch.commit();
+          await markSaleFailedForIntent(intentId);
         } catch (err) {
-          console.error(`  ↳ Error marking sale failed for intent ${intentId}:`, err.message);
+          console.error(`  -> Error marking sale failed for intent ${intentId}:`, err.message);
+        }
+      }
+      break;
+    }
+    case "qrph.expired": {
+      const intentId = event?.data?.attributes?.data?.attributes?.payment_intent_id;
+      if (intentId) {
+        try {
+          await markSaleFailedForIntent(intentId);
+        } catch (err) {
+          console.error(`  -> Error marking expired QR Ph sale failed for intent ${intentId}:`, err.message);
         }
       }
       break;

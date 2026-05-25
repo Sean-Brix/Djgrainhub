@@ -92,8 +92,8 @@ async function createSale(req, res) {
   if (!machineId || !items || items.length === 0) {
     return res.status(400).json({ error: "machineId and items are required" });
   }
-  if (status !== "completed") {
-    return res.status(400).json({ error: "Only completed sales can be recorded" });
+  if (!["pending", "completed"].includes(status)) {
+    return res.status(400).json({ error: "status must be pending or completed" });
   }
 
   // Validate products
@@ -134,19 +134,19 @@ async function createSale(req, res) {
     return ref;
   });
 
-  // Decrement stock for each product
-  for (let idx = 0; idx < items.length; idx++) {
-    const item = items[idx];
-    const productData = docToObj(productDocs[idx]);
-    const newStock = Math.max(0, productData.stock - item.quantity);
-    batch.update(db.collection("products").doc(item.productId), { stock: newStock, updatedAt: ts });
-  }
+  if (status === "completed") {
+    for (let idx = 0; idx < items.length; idx++) {
+      const item = items[idx];
+      const productData = docToObj(productDocs[idx]);
+      const newStock = Math.max(0, productData.stock - item.quantity);
+      batch.update(db.collection("products").doc(item.productId), { stock: newStock, updatedAt: ts });
+    }
 
-  // Update machine earnings
-  batch.update(db.collection("machines").doc(machineId), {
-    earnings: admin.firestore.FieldValue.increment(totalPrice),
-    updatedAt: ts,
-  });
+    batch.update(db.collection("machines").doc(machineId), {
+      earnings: admin.firestore.FieldValue.increment(totalPrice),
+      updatedAt: ts,
+    });
+  }
 
   await batch.commit();
 
@@ -167,6 +167,18 @@ async function completeSale(req, res) {
   if (sale.status === "completed") return res.json(sale); // idempotent
 
   await completeSaleById(id);
+  return res.json(docToObj(await db.collection("sales").doc(id).get()));
+}
+
+async function failSale(req, res) {
+  const { id } = req.params;
+  const doc = await db.collection("sales").doc(id).get();
+  if (!doc.exists) return res.status(404).json({ error: "Sale not found" });
+
+  const sale = docToObj(doc);
+  if (sale.status === "completed" || sale.status === "failed") return res.json(sale);
+
+  await db.collection("sales").doc(id).update({ status: "failed", updatedAt: now() });
   return res.json(docToObj(await db.collection("sales").doc(id).get()));
 }
 
@@ -198,6 +210,29 @@ async function completeSaleById(saleId) {
 
   await batch.commit();
   return docToObj(await db.collection("sales").doc(saleId).get());
+}
+
+async function failSaleByPaymentIntentId(paymentIntentId) {
+  if (!paymentIntentId) return { count: 0 };
+
+  const snap = await db.collection("sales")
+    .where("paymentIntentId", "==", paymentIntentId)
+    .get();
+
+  const batch = db.batch();
+  const ts = now();
+  let count = 0;
+
+  snap.docs.forEach((d) => {
+    const sale = d.data();
+    if (sale.status !== "completed" && sale.status !== "failed") {
+      batch.update(d.ref, { status: "failed", updatedAt: ts });
+      count += 1;
+    }
+  });
+
+  if (count > 0) await batch.commit();
+  return { count };
 }
 
 // ─── GET /api/sales/export ────────────────────────────────────────────
@@ -237,4 +272,13 @@ async function exportSalesCsv(req, res) {
   return res.send(csv);
 }
 
-module.exports = { getSales, getSaleById, createSale, completeSale, completeSaleById, exportSalesCsv };
+module.exports = {
+  getSales,
+  getSaleById,
+  createSale,
+  completeSale,
+  failSale,
+  completeSaleById,
+  failSaleByPaymentIntentId,
+  exportSalesCsv,
+};

@@ -30,6 +30,8 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
   const [elapsed, setElapsed] = useState(0);
   const [testCountdown, setTestCountdown] = useState(5);
   const intentIdRef = useRef<string | null>(null);
+  const saleIdRef = useRef<string | null>(null);
+  const completedRef = useRef(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -44,6 +46,9 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
     setErrorMsg('');
     setElapsed(0);
     setTestCountdown(5);
+    intentIdRef.current = null;
+    saleIdRef.current = null;
+    completedRef.current = false;
     stopPolling();
 
     // ── TEST MODE: skip PayMongo, auto-succeed after 5 s ──────────────────
@@ -96,13 +101,30 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
       });
       const id        = intentData?.data?.id;
       const clientKey = intentData?.data?.attributes?.client_key;
+      if (!id || !clientKey) throw new Error('Payment intent was not returned by PayMongo');
       intentIdRef.current = id;
 
-      // 2. Create qrph payment method
+      // 2. Create a local pending sale before showing a payable QR code.
+      const pendingSale = await api.post<any>('/sales', {
+        machineId,
+        paymentMethod: 'QR PH',
+        status: 'pending',
+        paymentIntentId: id,
+        items: cart.map(item => ({
+          productId: item.product.id,
+          quantity: item.quantity,
+          unitPrice: item.product.price,
+        })),
+      });
+      saleIdRef.current = pendingSale?.id ?? null;
+      if (!saleIdRef.current) throw new Error('Pending transaction was not created');
+
+      // 3. Create qrph payment method
       const methodData = await api.post<any>('/payment/method', { type: 'qrph' });
       const methodId   = methodData?.data?.id;
+      if (!methodId) throw new Error('Payment method was not returned by PayMongo');
 
-      // 3. Attach → get QR image
+      // 4. Attach payment method and get QR image.
       const attachData = await api.post<any>(`/payment/intent/${id}/attach`, {
         payment_method_id: methodId,
         client_key: clientKey,
@@ -113,7 +135,7 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
       setQrUrl(imageUrl);
       setPhase('ready');
 
-      // 4. Poll PayMongo every 3s for payment confirmation
+      // 5. Poll as a fallback. The webhook should complete this first in production.
       pollRef.current = setInterval(async () => {
         try {
           const status = await api.get<any>(`/payment/intent/${id}`);
@@ -121,25 +143,23 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
           if (s === 'succeeded') {
             stopPolling();
             try {
-              const saleData = await api.post<any>('/sales', {
-                machineId,
-                paymentMethod: 'QR PH',
-                status: 'completed',
-                paymentIntentId: id,
-                items: cart.map(item => ({
-                  productId: item.product.id,
-                  quantity: item.quantity,
-                  unitPrice: item.product.price,
-                })),
-              });
-              onSuccess(saleData?.id ?? '');
+              if (completedRef.current) return;
+              completedRef.current = true;
+              const saleId = saleIdRef.current;
+              if (!saleId) throw new Error('Pending transaction is missing');
+              const saleData = await api.patch<any>(`/sales/${saleId}/complete`, {});
+              onSuccess(saleData?.id ?? saleId);
             } catch (err: any) {
               setErrorMsg(err?.message || 'Payment succeeded but saving transaction failed');
               setPhase('error');
             }
-          } else if (s === 'failed') {
+          } else if (s === 'awaiting_payment_method' && status?.data?.attributes?.last_payment_error) {
             stopPolling();
-            setErrorMsg('Payment failed. Please try again.');
+            const saleId = saleIdRef.current;
+            if (saleId) {
+              await api.patch<any>(`/sales/${saleId}/fail`, {}).catch(() => undefined);
+            }
+            setErrorMsg(status?.data?.attributes?.last_payment_error?.message || 'Payment failed. Please try again.');
             setPhase('error');
           }
         } catch { /* silently ignore poll errors */ }
@@ -148,10 +168,14 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
       // Elapsed timer for UX
       tickRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
     } catch (e: any) {
+      const saleId = saleIdRef.current;
+      if (saleId && !completedRef.current) {
+        await api.patch<any>(`/sales/${saleId}/fail`, {}).catch(() => undefined);
+      }
       setErrorMsg(e.message || 'Failed to generate QR code');
       setPhase('error');
     }
-  }, [totalAmount, machineId, cart, onSuccess]);
+  }, [totalAmount, machineId, cart, onSuccess, isTestMode]);
 
   useEffect(() => {
     generateQR();

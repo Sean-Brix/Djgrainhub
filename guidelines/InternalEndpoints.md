@@ -43,6 +43,7 @@ Base path for backend APIs: `/api`
 - `GET /api/sales/:id` — sale detail (auth)
 - `POST /api/sales` — create sale (auth)
 - `PATCH /api/sales/:id/complete` — complete sale (auth)
+- `PATCH /api/sales/:id/fail` — mark pending payment sale failed (auth)
 
 ## Alerts
 - `GET /api/alerts` — list alerts (auth)

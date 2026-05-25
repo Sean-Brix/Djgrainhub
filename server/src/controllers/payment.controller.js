@@ -13,7 +13,10 @@
 
 const crypto = require("crypto");
 const { prisma } = require("../lib/prisma");
-const { completeSaleById } = require("./sales.controller");
+const {
+  completeSaleById,
+  failSaleByPaymentIntentId,
+} = require("./sales.controller");
 
 const PAYMONGO_BASE = "https://api.paymongo.com/v1";
 
@@ -44,6 +47,105 @@ async function pmFetch(method, path, body = null) {
 
 // In-memory webhook event log (dev/debug only — resets on server restart)
 const webhookLog = [];
+
+function parseSignatureHeader(header) {
+  return String(header || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((acc, part) => {
+      const separator = part.indexOf("=");
+      if (separator === -1) return acc;
+      acc[part.slice(0, separator)] = part.slice(separator + 1);
+      return acc;
+    }, {});
+}
+
+function timingSafeHexEqual(received, expected) {
+  if (!/^[a-f0-9]+$/i.test(received || "") || !/^[a-f0-9]+$/i.test(expected || "")) {
+    return false;
+  }
+
+  const receivedBuffer = Buffer.from(received, "hex");
+  const expectedBuffer = Buffer.from(expected, "hex");
+  return (
+    receivedBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(receivedBuffer, expectedBuffer)
+  );
+}
+
+function verifyWebhookSignature(req) {
+  const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return {
+      ok: process.env.NODE_ENV !== "production",
+      status: 500,
+      error: "Webhook secret is not configured",
+    };
+  }
+
+  const sigHeader = req.headers["paymongo-signature"];
+  if (!sigHeader) {
+    return { ok: false, status: 400, error: "Missing signature" };
+  }
+
+  const parts = parseSignatureHeader(sigHeader);
+  const timestamp = parts.t;
+  const isLiveEvent = req.body?.data?.attributes?.livemode === true;
+  const receivedSig = (isLiveEvent ? parts.li : parts.te) || parts.li || parts.te;
+
+  if (!timestamp || !receivedSig) {
+    return { ok: false, status: 400, error: "Invalid signature header" };
+  }
+
+  if (typeof req.rawBody !== "string") {
+    return { ok: false, status: 400, error: "Raw body unavailable" };
+  }
+
+  const expected = crypto
+    .createHmac("sha256", webhookSecret)
+    .update(`${timestamp}.${req.rawBody}`)
+    .digest("hex");
+
+  if (!timingSafeHexEqual(receivedSig, expected)) {
+    return { ok: false, status: 400, error: "Invalid signature" };
+  }
+
+  return { ok: true };
+}
+
+async function completeSaleForPaidIntent(intentId, paidAmount) {
+  if (!intentId) return;
+
+  const sale = await prisma.sale.findUnique({ where: { paymentIntentId: intentId } });
+  if (!sale) {
+    console.warn(`  -> No sale found for intentId: ${intentId}`);
+    return;
+  }
+
+  const paidCentavos = Number(paidAmount);
+  const expectedCentavos = Math.round(Number(sale.totalPrice) * 100);
+  if (Number.isFinite(paidCentavos) && paidCentavos !== expectedCentavos) {
+    console.error(
+      `  -> Amount mismatch for sale ${sale.id}: paid ${paidCentavos}, expected ${expectedCentavos}`
+    );
+    return;
+  }
+
+  await completeSaleById(sale.id);
+  console.log(`  -> Sale ${sale.id} confirmed via webhook`);
+}
+
+async function markSaleFailedForIntent(intentId) {
+  if (!intentId) return;
+
+  const result = await failSaleByPaymentIntentId(intentId);
+  if (result.count > 0) {
+    console.log(`  -> Pending sale for intent ${intentId} marked failed`);
+  } else {
+    console.log(`  -> No pending sale to mark failed for intent ${intentId}`);
+  }
+}
 
 // ─── Payment Intents ─────────────────────────────────────────────────────────
 
@@ -201,6 +303,12 @@ const getPaymentLink = async (req, res) => {
  * Register this URL in your PayMongo dashboard → Webhooks.
  */
 const handleWebhook = async (req, res) => {
+  const signature = verifyWebhookSignature(req);
+  if (!signature.ok) {
+    console.warn(`[PayMongo] ${signature.error} - rejected`);
+    return res.status(signature.status).json({ error: signature.error });
+  }
+
   // ── Signature verification ────────────────────────────────────────────────
   const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
   if (webhookSecret) {
@@ -244,52 +352,64 @@ const handleWebhook = async (req, res) => {
       const paymentId   = event?.data?.attributes?.data?.id;
       const paidAmount  = event?.data?.attributes?.data?.attributes?.amount;
       const intentId    = event?.data?.attributes?.data?.attributes?.payment_intent_id;
-      console.log(`  ↳ payment.paid — id:${paymentId} intent:${intentId} amount:${paidAmount} centavos`);
+      console.log(`  -> payment.paid - id:${paymentId} intent:${intentId} amount:${paidAmount} centavos`);
 
       if (intentId) {
         try {
-          // Confirm/complete any matching sale for this intent (legacy-safe).
-          const sale = await prisma.sale.findUnique({ where: { paymentIntentId: intentId } });
-          if (sale) {
-            await completeSaleById(sale.id);
-            console.log(`  ↳ Sale ${sale.id} confirmed via webhook`);
-          } else {
-            console.warn(`  ↳ No sale found for intentId: ${intentId}`);
-          }
+          await completeSaleForPaidIntent(intentId, paidAmount);
         } catch (err) {
-          console.error(`  ↳ Error completing sale for intent ${intentId}:`, err.message);
+          console.error(`  -> Error completing sale for intent ${intentId}:`, err.message);
+        }
+      }
+      break;
+    }
+    case "payment_intent.succeeded": {
+      const intentId = event?.data?.attributes?.data?.id;
+      const amount = event?.data?.attributes?.data?.attributes?.amount;
+      console.log(`  -> payment_intent.succeeded - intent:${intentId} amount:${amount} centavos`);
+
+      if (intentId) {
+        try {
+          await completeSaleForPaidIntent(intentId, amount);
+        } catch (err) {
+          console.error(`  -> Error completing sale for intent ${intentId}:`, err.message);
         }
       }
       break;
     }
     case "payment.failed": {
       const intentId = event?.data?.attributes?.data?.attributes?.payment_intent_id;
-      console.log(`  ↳ payment.failed — intent:${intentId}`);
+      console.log(`  -> payment.failed - intent:${intentId}`);
 
       if (intentId) {
         try {
-          const result = await prisma.sale.updateMany({
-            where: { paymentIntentId: intentId, status: "pending" },
-            data:  { status: "failed" },
-          });
-          if (result.count > 0) {
-            console.log(`  ↳ Legacy pending sale for intent ${intentId} marked failed`);
-          } else {
-            console.log(`  ↳ No pending sale to mark failed for intent ${intentId}`);
-          }
+          await markSaleFailedForIntent(intentId);
         } catch (err) {
-          console.error(`  ↳ Error marking sale failed for intent ${intentId}:`, err.message);
+          console.error(`  -> Error marking sale failed for intent ${intentId}:`, err.message);
+        }
+      }
+      break;
+    }
+    case "qrph.expired": {
+      const intentId = event?.data?.attributes?.data?.attributes?.payment_intent_id;
+      console.log(`  -> qrph.expired - intent:${intentId}`);
+
+      if (intentId) {
+        try {
+          await markSaleFailedForIntent(intentId);
+        } catch (err) {
+          console.error(`  -> Error marking expired QR Ph sale failed for intent ${intentId}:`, err.message);
         }
       }
       break;
     }
     case "link.payment.paid": {
       const refNumber = event?.data?.attributes?.data?.attributes?.reference_number;
-      console.log(`  ↳ link.payment.paid — ref:${refNumber}`);
+      console.log(`  -> link.payment.paid - ref:${refNumber}`);
       break;
     }
     default:
-      console.log(`  ↳ unhandled event type: ${type}`);
+      console.log(`  -> unhandled event type: ${type}`);
   }
 
   res.status(200).json({ received: true });

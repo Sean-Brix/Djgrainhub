@@ -69,9 +69,10 @@ async function getSaleById(req, res) {
 // ─── POST /api/sales ──────────────────────────────────────────────────
 // Creates a new sale from the kiosk checkout flow.
 // Body: { machineId, paymentMethod, items: [{ productId, quantity, unitPrice }],
-//         status?: "completed", paymentIntentId?: string }
+//         status?: "pending"|"completed", paymentIntentId?: string }
 //
-// Pending sales are not allowed. A sale is persisted only after payment succeeds.
+// Pending sales are persisted before the customer scans the PayMongo QR. Stock
+// and earnings move only when the sale is completed by webhook or poll fallback.
 async function createSale(req, res) {
   const {
     machineId,
@@ -85,8 +86,8 @@ async function createSale(req, res) {
     return res.status(400).json({ error: "machineId and items are required" });
   }
 
-  if (status !== "completed") {
-    return res.status(400).json({ error: "Only completed sales can be recorded" });
+  if (!["pending", "completed"].includes(status)) {
+    return res.status(400).json({ error: "status must be pending or completed" });
   }
 
   // Validate all products exist
@@ -104,7 +105,6 @@ async function createSale(req, res) {
     0
   );
 
-  // Create only completed sale records.
   const sale = await prisma.$transaction(async (tx) => {
     const newSale = await tx.sale.create({
       data: {
@@ -125,15 +125,17 @@ async function createSale(req, res) {
       include: { items: true },
     });
 
-    for (const item of items) {
-      const product = products.find((p) => p.id === item.productId);
-      const newStock = Math.max(0, product.stock - item.quantity);
-      await tx.product.update({ where: { id: item.productId }, data: { stock: newStock } });
+    if (status === "completed") {
+      for (const item of items) {
+        const product = products.find((p) => p.id === item.productId);
+        const newStock = Math.max(0, product.stock - item.quantity);
+        await tx.product.update({ where: { id: item.productId }, data: { stock: newStock } });
+      }
+      await tx.machine.update({
+        where: { id: machineId },
+        data: { earnings: { increment: totalPrice } },
+      });
     }
-    await tx.machine.update({
-      where: { id: machineId },
-      data: { earnings: { increment: totalPrice } },
-    });
 
     return newSale;
   });
@@ -182,6 +184,23 @@ async function completeSale(req, res) {
   return res.json(updated);
 }
 
+// ─── PATCH /api/sales/:id/fail ────────────────────────────────────────────────
+// Marks a pending sale as failed. Completed sales are left unchanged.
+async function failSale(req, res) {
+  const { id } = req.params;
+
+  const sale = await prisma.sale.findUnique({ where: { id } });
+  if (!sale) return res.status(404).json({ error: "Sale not found" });
+  if (sale.status === "completed" || sale.status === "failed") return res.json(sale);
+
+  const updated = await prisma.sale.update({
+    where: { id },
+    data: { status: "failed" },
+  });
+
+  return res.json(updated);
+}
+
 // ─── Internal helper (used by webhook) ───────────────────────────────
 // Same logic as completeSale but takes a sale object instead of req/res.
 async function completeSaleById(saleId) {
@@ -212,6 +231,18 @@ async function completeSaleById(saleId) {
   });
 }
 
+async function failSaleByPaymentIntentId(paymentIntentId) {
+  if (!paymentIntentId) return { count: 0 };
+
+  return prisma.sale.updateMany({
+    where: {
+      paymentIntentId,
+      status: { not: "completed" },
+    },
+    data: { status: "failed" },
+  });
+}
+
 // ─── GET /api/sales/export ────────────────────────────────────────────
 // Returns a CSV file of all transactions for the current user.
 async function exportSalesCsv(req, res) {
@@ -239,4 +270,13 @@ async function exportSalesCsv(req, res) {
   return res.send(csv);
 }
 
-module.exports = { getSales, getSaleById, createSale, completeSale, completeSaleById, exportSalesCsv };
+module.exports = {
+  getSales,
+  getSaleById,
+  createSale,
+  completeSale,
+  failSale,
+  completeSaleById,
+  failSaleByPaymentIntentId,
+  exportSalesCsv,
+};

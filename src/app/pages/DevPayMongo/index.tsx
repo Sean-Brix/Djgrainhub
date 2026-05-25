@@ -738,7 +738,9 @@ function WebhookLogTab() {
   const TYPE_COLOR: Record<string, string> = {
     'payment.paid':           'bg-green-100 text-green-700 border-green-200',
     'payment.failed':         'bg-red-100 text-red-700 border-red-200',
+    'qrph.expired':           'bg-amber-100 text-amber-700 border-amber-200',
     'link.payment.paid':      'bg-green-100 text-green-700 border-green-200',
+    'payment_intent.succeeded': 'bg-green-100 text-green-700 border-green-200',
     'payment_intent.payment_paid': 'bg-green-100 text-green-700 border-green-200',
   };
 
@@ -750,7 +752,7 @@ function WebhookLogTab() {
           <BadgeInfo size={16} className="text-primary shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-slate-700">Register this URL in PayMongo dashboard → Webhooks</p>
-            <code className="text-xs font-mono text-slate-500 break-all">POST http://&lt;your-server-ip&gt;:3000/api/payment/webhook</code>
+            <code className="text-xs font-mono text-slate-500 break-all">POST https://&lt;your-public-domain&gt;/api/payment/webhook</code>
           </div>
           <p className="text-[11px] text-slate-400 shrink-0">Local dev: <code className="font-mono">ngrok http 3000</code></p>
         </CardContent>
