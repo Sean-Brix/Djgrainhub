@@ -3,7 +3,6 @@ const cors = require("cors");
 const path = require("path");
 const dotenv = require("dotenv");
 const { router } = require("./routes");
-const { connectMqtt } = require("./lib/mqtt");
 const Layer = require("express/lib/router/layer");
 
 dotenv.config();
@@ -59,6 +58,7 @@ app.use(express.json({
     req.rawBody = buf.toString(encoding || "utf8");
   },
 }));
+app.use(express.urlencoded({ extended: false, limit: "20kb" }));
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use("/api", router);
@@ -118,9 +118,6 @@ if (fs.existsSync(DIST_DIR)) {
       .sendFile(path.join(DIST_DIR, "index.html"));
   });
 }
-
-// MQTT
-connectMqtt();
 
 // ─── Global error handler ─────────────────────────────────────────────────
 // Must be declared AFTER routes so Express treats it as an error middleware.

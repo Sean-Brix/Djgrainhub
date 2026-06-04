@@ -39,7 +39,7 @@ function simulateDispense(req, res) {
     slots[key] = body[key] !== undefined ? Boolean(body[key]) : true;
   }
 
-  const payload = { id: machineId, ...slots };
+  const payload = slots;
   messageLog.push("dispense (simulated)", payload);
   console.log(`DEV simulate-dispense for machine ${machineId}:`, slots);
   dispenseBus.emit(`dispense:${machineId}`, payload);

@@ -75,7 +75,6 @@ const itemVariants = {
 
 const PRESET_PAYLOADS: Record<string, object> = {
   order: {
-    id: '',
     slot1: 0,
     slot2: 0,
     slot3: 0,
@@ -84,7 +83,6 @@ const PRESET_PAYLOADS: Record<string, object> = {
     slot6: 0,
   },
   dispense: {
-    id: '',
     slot1: true,
     slot2: true,
     slot3: true,
@@ -269,8 +267,8 @@ export function DevMqtt() {
           <Radio size={20} className="text-primary" />
         </div>
         <div>
-          <h1 className="text-2xl font-black text-foreground tracking-tight">MQTT Dev Console</h1>
-          <p className="text-sm text-muted-foreground">Publish, simulate, and monitor vending machine MQTT traffic</p>
+          <h1 className="text-2xl font-black text-foreground tracking-tight">Device Dev Console</h1>
+          <p className="text-sm text-muted-foreground">Simulate and monitor vending machine device traffic</p>
         </div>
       </motion.div>
 
@@ -279,9 +277,9 @@ export function DevMqtt() {
         variants={itemVariants}
         className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700 leading-relaxed"
       >
-        <span className="font-bold">ESP32 contract — </span>
-        Subscribe to <code className="bg-blue-100 px-1 rounded">order</code> (receives dispatch instructions with <code className="bg-blue-100 px-1 rounded">id</code> key) ·
-        Publish to <code className="bg-blue-100 px-1 rounded">dispense</code> (confirmation payload must include <code className="bg-blue-100 px-1 rounded">id</code>)
+        <span className="font-bold">ESP32 contract - </span>
+        Orders are sent over HTTP with <code className="bg-blue-100 px-1 rounded">value=slot1,...,slot6</code>.
+        Confirmations post <code className="bg-blue-100 px-1 rounded">slot1</code> through <code className="bg-blue-100 px-1 rounded">slot6</code> booleans with no <code className="bg-blue-100 px-1 rounded">id</code> in the payload.
       </motion.div>
 
       {/* Tabs */}
@@ -382,7 +380,7 @@ export function DevMqtt() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-xs text-amber-700">
-                  This bypasses MQTT and fires the dispense confirmation directly on the server bus — use it to test the kiosk dispensing flow without physical hardware.
+                  This fires the slot-only dispense confirmation directly on the server bus - use it to test the kiosk dispensing flow without physical hardware.
                 </div>
 
                 <div>
@@ -496,13 +494,13 @@ export function DevMqtt() {
               </CardHeader>
               <CardContent>
                 <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-xs text-amber-700 mb-4">
-                  This is a read-only view of <code className="bg-amber-100 px-1 rounded">order</code> messages that the server has published. The ESP32 subscribes to this topic and reads the slot quantities.
+                  This is a read-only view of HTTP order logs. The device receives the slot quantities through the configured update endpoint.
                 </div>
 
                 {orderMessages.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground text-sm">
                     <ArrowDownCircle size={32} className="mx-auto mb-3 opacity-20" />
-                    No order messages yet. Send an order from the kiosk or use the <strong>Publish</strong> tab.
+                    No order messages yet. Send an order from the kiosk to create an HTTP order log.
                   </div>
                 ) : (
                   <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
@@ -520,9 +518,9 @@ export function DevMqtt() {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <TopicBadge topic={msg.topic} />
-                              {p.id && (
+                              {p.value && (
                                 <span className="text-[11px] font-mono text-slate-500 bg-white border border-slate-200 rounded px-1.5 py-0.5">
-                                  id: {p.id}
+                                  value: {p.value}
                                 </span>
                               )}
                             </div>

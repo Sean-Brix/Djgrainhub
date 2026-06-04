@@ -34,13 +34,9 @@ services:
       - key: JWT_SECRET
         sync: false
 
-      # MQTT broker (e.g. HiveMQ Cloud, EMQX)
-      - key: MQTT_BROKER_URL
-        sync: false          # e.g. mqtts://abc.hivemq.cloud:8883
-      - key: MQTT_USERNAME
-        sync: false
-      - key: MQTT_PASSWORD
-        sync: false
+      # Device HTTP order endpoint
+      - key: DEVICE_ORDER_URL
+        value: https://phsolutions.tech/iotsystem/update.php
 
       # PayMongo
       - key: PAYMONGO_SECRET_KEY

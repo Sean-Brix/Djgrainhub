@@ -51,7 +51,7 @@ function simulateDispense(req, res) {
     slots[key] = body[key] !== undefined ? Boolean(body[key]) : true;
   }
 
-  const payload = { id: machineId, ...slots };
+  const payload = slots;
 
   // Also log it so the monitor shows it
   messageLog.push("dispense (simulated)", payload);

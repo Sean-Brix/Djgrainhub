@@ -34,8 +34,9 @@ Base path for backend APIs: `/api`
 - `POST /api/machines/:machineId/events` — create event log entry (auth)
 
 ## Dispense (ESP32 integration)
-- `POST /api/machines/:machineId/order` — send dispense order (auth; publishes MQTT `order`, waits for MQTT `dispense`)
-- `GET /api/machines/:machineId/dispense/latest` — last dispense result (auth)
+- `POST /api/machines/:machineId/order` - send HTTP dispense order (auth; waits for HTTP confirmation)
+- `POST /api/machines/:machineId/dispense` - receive device dispense confirmation (public; payload is `slot1`..`slot6` booleans, no `id`)
+- `GET /api/machines/:machineId/dispense/latest` - last dispense result (auth)
 
 ## Sales
 - `GET /api/sales` — list sales (auth)

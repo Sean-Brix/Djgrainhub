@@ -3,7 +3,6 @@ const cors = require("cors");
 const path = require("path");
 const dotenv = require("dotenv");
 const { router } = require("./routes");
-const { connectMqtt } = require("./lib/mqtt");
 const Layer = require("express/lib/router/layer");
 
 dotenv.config({ path: path.join(__dirname, "../.env") });
@@ -40,12 +39,10 @@ app.use(
     },
   })
 );
+app.use(express.urlencoded({ extended: false, limit: "20kb" }));
 
 // API routes
 app.use("/api", router);
-
-// Connect MQTT (lazy singleton — reconnects if dropped between warm invocations)
-connectMqtt();
 
 // Global error handler — must be after routes
 // eslint-disable-next-line no-unused-vars

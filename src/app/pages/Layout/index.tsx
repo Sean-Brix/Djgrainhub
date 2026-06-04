@@ -35,7 +35,7 @@ export function Layout({ children, currentPage, onNavigate, onLogout, user }: La
     { id: 'reports', label: 'Reports', icon: MessageSquareWarning, permission: permissions.canViewReports },
     { id: 'settings',      label: 'Settings',    icon: Settings,       permission: permissions.canViewDashboard },
     { id: 'dev-paymongo', label: 'PayMongo',     icon: FlaskConical,   permission: permissions.canManageMachines },
-    { id: 'dev-mqtt',     label: 'MQTT Console', icon: Radio,          permission: permissions.canManageMachines },
+    { id: 'dev-mqtt',     label: 'Device Console', icon: Radio,        permission: permissions.canManageMachines },
   ];
 
   const navItems = allNavItems.filter(item => hasPermission(item.permission));
