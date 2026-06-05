@@ -21,6 +21,12 @@ interface PaymentPageProps {
 
 type Phase = 'generating' | 'ready' | 'error';
 
+const PAID_INTENT_STATUSES = new Set(['succeeded', 'paid']);
+
+function isPaidIntentStatus(status: unknown) {
+  return typeof status === 'string' && PAID_INTENT_STATUSES.has(status);
+}
+
 export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }: PaymentPageProps) {
   const isTestMode = localStorage.getItem(PAYMENT_TEST_MODE_KEY) === 'true';
 
@@ -32,13 +38,62 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
   const intentIdRef = useRef<string | null>(null);
   const saleIdRef = useRef<string | null>(null);
   const completedRef = useRef(false);
+  const confirmingRef = useRef(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const stopPolling = () => {
+  const stopPolling = useCallback(() => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
-  };
+  }, []);
+
+  const finishPayment = useCallback((confirmedSaleId?: string | null) => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    stopPolling();
+    onSuccess(confirmedSaleId || saleIdRef.current || '');
+  }, [onSuccess, stopPolling]);
+
+  const confirmPaidIntent = useCallback(async () => {
+    if (completedRef.current || confirmingRef.current) return null;
+
+    const saleId = saleIdRef.current;
+    const intentId = intentIdRef.current;
+    if (!saleId || !intentId) throw new Error('Pending transaction is missing');
+
+    confirmingRef.current = true;
+    try {
+      const confirmation = await api.post<any>(`/payment/intent/${intentId}/confirm`, { saleId });
+      if (confirmation?.paid === false) return confirmation;
+      finishPayment(confirmation?.sale?.id ?? saleId);
+      return confirmation;
+    } finally {
+      confirmingRef.current = false;
+    }
+  }, [finishPayment]);
+
+  const checkLocalSaleStatus = useCallback(async () => {
+    const saleId = saleIdRef.current;
+    if (!saleId || completedRef.current) return false;
+
+    try {
+      const sale = await api.get<any>(`/sales/${saleId}`);
+      if (sale?.status === 'completed') {
+        finishPayment(sale?.id ?? saleId);
+        return true;
+      }
+      if (sale?.status === 'failed') {
+        stopPolling();
+        setErrorMsg('Payment was not confirmed. Please generate a new QR code and try again.');
+        setPhase('error');
+        return true;
+      }
+    } catch {
+      // Keep the QR screen alive while transient network/auth checks recover.
+    }
+
+    return false;
+  }, [finishPayment, stopPolling]);
 
   const generateQR = useCallback(async () => {
     setPhase('generating');
@@ -49,6 +104,7 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
     intentIdRef.current = null;
     saleIdRef.current = null;
     completedRef.current = false;
+    confirmingRef.current = false;
     stopPolling();
 
     // ── TEST MODE: skip PayMongo, auto-succeed after 5 s ──────────────────
@@ -76,7 +132,7 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
                     unitPrice: item.product.price,
                   })),
                 });
-                onSuccess(saleData?.id ?? '');
+                finishPayment(saleData?.id ?? '');
               } catch (err: any) {
                 setErrorMsg(err?.message || 'Failed to save completed test transaction');
                 setPhase('error');
@@ -137,32 +193,57 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
 
       // 5. Poll as a fallback. The webhook should complete this first in production.
       pollRef.current = setInterval(async () => {
+        if (completedRef.current) return;
+
+        // Always check Firestore first — cheap and catches webhook-completed sales
+        // even when a PayMongo confirm call is already in flight.
+        const done = await checkLocalSaleStatus();
+        if (done) return;
+
+        if (confirmingRef.current) return;
+
+        let attrs: any = null;
         try {
-          const status = await api.get<any>(`/payment/intent/${id}`);
-          const s = status?.data?.attributes?.status;
-          if (s === 'succeeded') {
-            stopPolling();
+          const confirmation = await confirmPaidIntent();
+          if (confirmation?.paid) return;
+          attrs = confirmation?.intent?.data?.attributes ?? null;
+        } catch {
+          // Fall back to a plain status read.
+        }
+
+        if (!attrs) {
+          try {
+            const status = await api.get<any>(`/payment/intent/${id}`);
+            attrs = status?.data?.attributes ?? null;
+          } catch {
+            // Keep waiting.
+          }
+        }
+
+        if (attrs) {
+          const s = attrs.status;
+          if (isPaidIntentStatus(s)) {
             try {
-              if (completedRef.current) return;
-              completedRef.current = true;
-              const saleId = saleIdRef.current;
-              if (!saleId) throw new Error('Pending transaction is missing');
-              const saleData = await api.patch<any>(`/sales/${saleId}/complete`, {});
-              onSuccess(saleData?.id ?? saleId);
+              await confirmPaidIntent();
             } catch (err: any) {
-              setErrorMsg(err?.message || 'Payment succeeded but saving transaction failed');
+              stopPolling();
+              setErrorMsg(err?.message || 'Payment succeeded but transaction confirmation failed');
               setPhase('error');
             }
-          } else if (s === 'awaiting_payment_method' && status?.data?.attributes?.last_payment_error) {
+            return;
+          }
+
+          if (s === 'awaiting_payment_method' && attrs.last_payment_error) {
             stopPolling();
             const saleId = saleIdRef.current;
             if (saleId) {
               await api.patch<any>(`/sales/${saleId}/fail`, {}).catch(() => undefined);
             }
-            setErrorMsg(status?.data?.attributes?.last_payment_error?.message || 'Payment failed. Please try again.');
+            setErrorMsg(attrs.last_payment_error?.message || 'Payment failed. Please try again.');
             setPhase('error');
+            return;
           }
-        } catch { /* silently ignore poll errors */ }
+        }
       }, 3000);
 
       // Elapsed timer for UX
@@ -175,12 +256,21 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
       setErrorMsg(e.message || 'Failed to generate QR code');
       setPhase('error');
     }
-  }, [totalAmount, machineId, cart, onSuccess, isTestMode]);
+  }, [
+    totalAmount,
+    machineId,
+    cart,
+    isTestMode,
+    stopPolling,
+    finishPayment,
+    confirmPaidIntent,
+    checkLocalSaleStatus,
+  ]);
 
   useEffect(() => {
     generateQR();
     return stopPolling;
-  }, [generateQR]);
+  }, [generateQR, stopPolling]);
 
   const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
   const seconds = String(elapsed % 60).padStart(2, '0');
@@ -208,7 +298,7 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
             <p className="text-primary/60 text-sm">
               {isTestMode
                 ? 'Testing mode is active — payment will be simulated'
-                : 'Use GCash, Maya, or any QR Ph\u2011enabled app'}
+                : 'Use GCash, Maya, or any QR Ph-enabled app'}
             </p>
           </div>
 
@@ -224,7 +314,7 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
               <div className="flex flex-col items-center gap-3 text-primary/60">
                 <Loader2 size={40} className="animate-spin" />
                 <p className="text-sm font-medium">
-                  {isTestMode ? 'Setting up test payment\u2026' : 'Generating QR code\u2026'}
+                  {isTestMode ? 'Setting up test payment...' : 'Generating QR code...'}
                 </p>
               </div>
             )}
@@ -247,7 +337,7 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
                 </div>
                 <div className="flex items-center gap-1.5 text-xs font-medium text-amber-600">
                   <FlaskConical size={13} />
-                  <span>Simulating payment\u2026</span>
+                  <span>Simulating payment...</span>
                 </div>
               </div>
             )}
@@ -282,19 +372,19 @@ export function PaymentPage({ totalAmount, machineId, cart, onBack, onSuccess }:
           {isTestMode && phase === 'ready' && (
             <div className="flex items-center justify-center gap-2 text-sm font-medium text-amber-500">
               <FlaskConical size={15} className="animate-pulse" />
-              <span>Auto-approving in {testCountdown}s\u2026</span>
+              <span>Auto-approving in {testCountdown}s...</span>
             </div>
           )}
           {!isTestMode && phase === 'ready' && (
             <div className="flex items-center justify-center gap-2 text-sm text-primary/50">
               <Smartphone size={15} className="animate-pulse" />
-              <span>Waiting for payment\u2026 <span className="font-mono">{minutes}:{seconds}</span></span>
+              <span>Waiting for payment... <span className="font-mono">{minutes}:{seconds}</span></span>
             </div>
           )}
           {phase === 'generating' && (
             <div className="flex items-center justify-center gap-2 text-sm text-primary/40">
               <QrCode size={15} />
-              <span>{isTestMode ? 'Preparing test mode\u2026' : 'Connecting to PayMongo\u2026'}</span>
+              <span>{isTestMode ? 'Preparing test mode...' : 'Connecting to PayMongo...'}</span>
             </div>
           )}
         </Card>

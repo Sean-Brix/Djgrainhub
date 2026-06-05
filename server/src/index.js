@@ -46,6 +46,7 @@ function isDatabaseUnavailable(err) {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.set("etag", false);
 
 // In production the React build lives two levels up: <repo>/dist
 const DIST_DIR = path.join(__dirname, "..", "..", "dist");
@@ -59,6 +60,15 @@ app.use(express.json({
   },
 }));
 app.use(express.urlencoded({ extended: false, limit: "20kb" }));
+
+app.use("/api", (req, res, next) => {
+  delete req.headers["if-none-match"];
+  delete req.headers["if-modified-since"];
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  next();
+});
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use("/api", router);

@@ -22,6 +22,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
   };
 
   if (token) {
@@ -33,7 +35,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     Object.assign(headers, options.headers as Record<string, string>);
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers,
+    cache: 'no-store',
+  });
 
   if (!res.ok) {
     let errMessage = `HTTP ${res.status}`;

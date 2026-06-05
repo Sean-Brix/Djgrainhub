@@ -29,6 +29,7 @@ process.on("unhandledRejection", (reason) => {
 });
 
 const app = express();
+app.set("etag", false);
 
 app.use(cors({ origin: true }));
 app.use(
@@ -40,6 +41,15 @@ app.use(
   })
 );
 app.use(express.urlencoded({ extended: false, limit: "20kb" }));
+
+app.use("/api", (req, res, next) => {
+  delete req.headers["if-none-match"];
+  delete req.headers["if-modified-since"];
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  next();
+});
 
 // API routes
 app.use("/api", router);

@@ -3,6 +3,7 @@ const { authenticate } = require("../middleware/auth.middleware");
 const {
   createPaymentIntent,
   getPaymentIntent,
+  confirmPaymentIntent,
   attachPaymentMethod,
   createPaymentMethod,
   createPaymentLink,
@@ -17,6 +18,7 @@ const paymentRouter = Router();
 // ─── Payment Intents ──────────────────────────────────────────────────────────
 paymentRouter.post("/intent",              authenticate, createPaymentIntent);
 paymentRouter.get("/intent/:id",           authenticate, getPaymentIntent);
+paymentRouter.post("/intent/:id/confirm",  authenticate, confirmPaymentIntent);
 paymentRouter.post("/intent/:id/attach",   authenticate, attachPaymentMethod);
 
 // ─── Payment Methods ──────────────────────────────────────────────────────────

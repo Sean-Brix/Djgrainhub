@@ -36,6 +36,7 @@ router.use("/users", usersRouter);
 router.use("/notifications", notificationsRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/payment", paymentRouter);
+router.use("/payments", paymentRouter);
 router.use("/dev/mqtt", devMqttRouter);
 
 module.exports = { router };

@@ -56,6 +56,7 @@ router.use("/dashboard", dashboardRouter);
 
 // ─── Payments (PayMongo) ──────────────────────────────────────────────
 router.use("/payment", paymentRouter);
+router.use("/payments", paymentRouter);
 
 // ─── Dev tools ────────────────────────────────────────────────────────
 router.use("/dev/mqtt", devMqttRouter);

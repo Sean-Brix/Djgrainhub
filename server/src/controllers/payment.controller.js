@@ -74,9 +74,39 @@ function timingSafeHexEqual(received, expected) {
   );
 }
 
+function getRawBodyString(req) {
+  if (typeof req.rawBody === "string") return req.rawBody;
+  if (Buffer.isBuffer(req.rawBody)) return req.rawBody.toString("utf8");
+  if (typeof req.body === "string") return req.body;
+  return null;
+}
+
+function getWebhookSecrets() {
+  return [
+    process.env.PAYMONGO_WEBHOOK_SECRET,
+    process.env.PAYMONGO_WEBHOOK_SECRET_ALT,
+    ...(process.env.PAYMONGO_WEBHOOK_SECRETS || "").split(","),
+  ]
+    .map((secret) => String(secret || "").trim())
+    .filter(Boolean)
+    .filter((secret, index, all) => all.indexOf(secret) === index);
+}
+
+function isPaymentIntentPaid(intent) {
+  const attrs = intent?.data?.attributes || {};
+  const payments = Array.isArray(attrs.payments) ? attrs.payments : [];
+  return (
+    attrs.status === "succeeded" ||
+    payments.some((payment) => {
+      const paymentAttrs = payment?.attributes || payment || {};
+      return paymentAttrs.status === "paid";
+    })
+  );
+}
+
 function verifyWebhookSignature(req) {
-  const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
-  if (!webhookSecret) {
+  const webhookSecrets = getWebhookSecrets();
+  if (webhookSecrets.length === 0) {
     return {
       ok: process.env.NODE_ENV !== "production",
       status: 500,
@@ -98,16 +128,20 @@ function verifyWebhookSignature(req) {
     return { ok: false, status: 400, error: "Invalid signature header" };
   }
 
-  if (typeof req.rawBody !== "string") {
+  const rawBody = getRawBodyString(req);
+  if (!rawBody) {
     return { ok: false, status: 400, error: "Raw body unavailable" };
   }
 
-  const expected = crypto
-    .createHmac("sha256", webhookSecret)
-    .update(`${timestamp}.${req.rawBody}`)
-    .digest("hex");
+  const isValid = webhookSecrets.some((secret) => {
+    const expected = crypto
+      .createHmac("sha256", secret)
+      .update(`${timestamp}.${rawBody}`)
+      .digest("hex");
+    return timingSafeHexEqual(receivedSig, expected);
+  });
 
-  if (!timingSafeHexEqual(receivedSig, expected)) {
+  if (!isValid) {
     return { ok: false, status: 400, error: "Invalid signature" };
   }
 
@@ -129,11 +163,14 @@ async function completeSaleForPaidIntent(intentId, paidAmount) {
     console.error(
       `  -> Amount mismatch for sale ${sale.id}: paid ${paidCentavos}, expected ${expectedCentavos}`
     );
-    return;
+    const err = new Error("Paid amount does not match the pending sale amount");
+    err.status = 409;
+    throw err;
   }
 
-  await completeSaleById(sale.id);
+  const completedSale = await completeSaleById(sale.id);
   console.log(`  -> Sale ${sale.id} confirmed via webhook`);
+  return completedSale;
 }
 
 async function markSaleFailedForIntent(intentId) {
@@ -195,9 +232,43 @@ const createPaymentIntent = async (req, res) => {
 const getPaymentIntent = async (req, res) => {
   try {
     const data = await pmFetch("GET", `/payment_intents/${req.params.id}`);
+    if (isPaymentIntentPaid(data)) {
+      try {
+        await completeSaleForPaidIntent(req.params.id, data?.data?.attributes?.amount);
+      } catch (err) {
+        console.error(`  -> Error syncing paid intent ${req.params.id}:`, err.message);
+      }
+    }
     res.json(data);
   } catch (err) {
     res.status(err.status || 500).json(err.data || { error: "PayMongo error" });
+  }
+};
+
+const confirmPaymentIntent = async (req, res) => {
+  const { saleId } = req.body || {};
+
+  try {
+    const data = await pmFetch("GET", `/payment_intents/${req.params.id}`);
+    const attrs = data?.data?.attributes || {};
+    const status = attrs.status;
+
+    if (!isPaymentIntentPaid(data)) {
+      return res.json({ paid: false, status, intent: data });
+    }
+
+    const sale = await prisma.sale.findUnique({ where: { paymentIntentId: req.params.id } });
+    if (!sale) {
+      return res.status(404).json({ error: "Matching sale not found for payment intent" });
+    }
+    if (saleId && sale.id !== saleId) {
+      return res.status(409).json({ error: "Payment intent does not match this sale" });
+    }
+
+    const completedSale = await completeSaleForPaidIntent(req.params.id, attrs.amount);
+    return res.json({ paid: true, status, sale: completedSale });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || "Payment confirmation failed" });
   }
 };
 
@@ -310,8 +381,8 @@ const handleWebhook = async (req, res) => {
   }
 
   // ── Signature verification ────────────────────────────────────────────────
-  const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
-  if (webhookSecret) {
+  const webhookSecrets = getWebhookSecrets();
+  if (webhookSecrets.length > 0) {
     const sigHeader = req.headers["paymongo-signature"];
     if (!sigHeader) {
       console.warn("[PayMongo] Missing Paymongo-Signature header — rejected");
@@ -319,18 +390,22 @@ const handleWebhook = async (req, res) => {
     }
 
     // Header format: "t=<timestamp>,te=<hmac_sha256>"
-    const parts = Object.fromEntries(sigHeader.split(",").map((p) => p.split("=")));
+    const parts = parseSignatureHeader(sigHeader);
     const timestamp = parts["t"];
-    const receivedSig = parts.li || parts.te;
+    const isLiveEvent = req.body?.data?.attributes?.livemode === true;
+    const receivedSig = (isLiveEvent ? parts.li : parts.te) || parts.li || parts.te;
 
     // Payload to sign: "<timestamp>.<raw json body>"
-    const rawBody = typeof req.rawBody === "string" ? req.rawBody : JSON.stringify(req.body);
-    const expected = crypto
-      .createHmac("sha256", webhookSecret)
-      .update(`${timestamp}.${rawBody}`)
-      .digest("hex");
+    const rawBody = getRawBodyString(req) || JSON.stringify(req.body);
+    const isValid = webhookSecrets.some((secret) => {
+      const expected = crypto
+        .createHmac("sha256", secret)
+        .update(`${timestamp}.${rawBody}`)
+        .digest("hex");
+      return timingSafeHexEqual(receivedSig, expected);
+    });
 
-    if (receivedSig !== expected) {
+    if (!isValid) {
       console.warn("[PayMongo] Signature mismatch — rejected");
       return res.status(400).json({ error: "Invalid signature" });
     }
@@ -348,11 +423,18 @@ const handleWebhook = async (req, res) => {
 
   // ── Handle specific event types ──────────────────────────────────────────
   switch (type) {
-    case "payment.paid": {
-      const paymentId   = event?.data?.attributes?.data?.id;
-      const paidAmount  = event?.data?.attributes?.data?.attributes?.amount;
-      const intentId    = event?.data?.attributes?.data?.attributes?.payment_intent_id;
-      console.log(`  -> payment.paid - id:${paymentId} intent:${intentId} amount:${paidAmount} centavos`);
+    case "payment.paid":
+    case "payment_intent.succeeded":
+    case "payment_intent.payment_paid": {
+      const resource = event?.data?.attributes?.data;
+      const attrs = resource?.attributes || {};
+      const paidAmount = attrs.amount;
+      const intentId =
+        attrs.payment_intent_id ||
+        attrs.payment_intent?.id ||
+        (typeof attrs.payment_intent === "string" ? attrs.payment_intent : null) ||
+        (String(resource?.id || "").startsWith("pi_") ? resource.id : null);
+      console.log(`  -> ${type} - intent:${intentId} amount:${paidAmount} centavos`);
 
       if (intentId) {
         try {
@@ -363,23 +445,16 @@ const handleWebhook = async (req, res) => {
       }
       break;
     }
-    case "payment_intent.succeeded": {
-      const intentId = event?.data?.attributes?.data?.id;
-      const amount = event?.data?.attributes?.data?.attributes?.amount;
-      console.log(`  -> payment_intent.succeeded - intent:${intentId} amount:${amount} centavos`);
-
-      if (intentId) {
-        try {
-          await completeSaleForPaidIntent(intentId, amount);
-        } catch (err) {
-          console.error(`  -> Error completing sale for intent ${intentId}:`, err.message);
-        }
-      }
-      break;
-    }
-    case "payment.failed": {
-      const intentId = event?.data?.attributes?.data?.attributes?.payment_intent_id;
-      console.log(`  -> payment.failed - intent:${intentId}`);
+    case "payment.failed":
+    case "payment_intent.payment_failed": {
+      const resource = event?.data?.attributes?.data;
+      const attrs = resource?.attributes || {};
+      const intentId =
+        attrs.payment_intent_id ||
+        attrs.payment_intent?.id ||
+        (typeof attrs.payment_intent === "string" ? attrs.payment_intent : null) ||
+        (String(resource?.id || "").startsWith("pi_") ? resource.id : null);
+      console.log(`  -> ${type} - intent:${intentId}`);
 
       if (intentId) {
         try {
@@ -391,7 +466,13 @@ const handleWebhook = async (req, res) => {
       break;
     }
     case "qrph.expired": {
-      const intentId = event?.data?.attributes?.data?.attributes?.payment_intent_id;
+      const resource = event?.data?.attributes?.data;
+      const attrs = resource?.attributes || {};
+      const intentId =
+        attrs.payment_intent_id ||
+        attrs.payment_intent?.id ||
+        (typeof attrs.payment_intent === "string" ? attrs.payment_intent : null) ||
+        (String(resource?.id || "").startsWith("pi_") ? resource.id : null);
       console.log(`  -> qrph.expired - intent:${intentId}`);
 
       if (intentId) {
@@ -435,6 +516,7 @@ const clearWebhookLog = (_req, res) => {
 module.exports = {
   createPaymentIntent,
   getPaymentIntent,
+  confirmPaymentIntent,
   attachPaymentMethod,
   createPaymentMethod,
   createPaymentLink,

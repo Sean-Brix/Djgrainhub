@@ -694,7 +694,9 @@ function QRPhTab() {
 
 interface WebhookEntry {
   timestamp: string;
-  type: string;
+  type?: string;
+  kind?: string;
+  intentId?: string;
   payload: unknown;
 }
 
@@ -703,6 +705,9 @@ function WebhookLogTab() {
   const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [debugIntentId, setDebugIntentId] = useState('');
+  const [debugLoading, setDebugLoading] = useState(false);
+  const [debugResult, setDebugResult] = useState<any>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchLog = useCallback(async () => {
@@ -744,6 +749,20 @@ function WebhookLogTab() {
     'payment_intent.payment_paid': 'bg-green-100 text-green-700 border-green-200',
   };
 
+  const handleDebugIntent = async () => {
+    const id = debugIntentId.trim();
+    if (!id) return;
+    setDebugLoading(true);
+    try {
+      const data = await api.get<any>(`/payment/debug/${encodeURIComponent(id)}`);
+      setDebugResult(data);
+    } catch (e: any) {
+      setDebugResult({ error: e.message || 'Debug request failed' });
+    } finally {
+      setDebugLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Webhook URL hint */}
@@ -758,11 +777,31 @@ function WebhookLogTab() {
         </CardContent>
       </Card>
 
+      <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+        <CardHeader className="p-5 pb-2">
+          <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-500">Payment Intent Debug</CardTitle>
+        </CardHeader>
+        <CardContent className="p-5 pt-2 space-y-3">
+          <div className="flex gap-2">
+            <Input
+              value={debugIntentId}
+              onChange={e => setDebugIntentId(e.target.value)}
+              placeholder="pi_xxxxxxxxxxxxxxxx"
+              className="h-10 font-mono text-xs"
+            />
+            <Button variant="outline" onClick={handleDebugIntent} disabled={debugLoading || !debugIntentId.trim()} className="h-10 px-3 shrink-0">
+              {debugLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            </Button>
+          </div>
+          {debugResult && <JsonBlock data={debugResult} />}
+        </CardContent>
+      </Card>
+
       {/* Controls */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-600">
           <span className="font-bold text-slate-900">{events.length}</span>
-          <span className="text-slate-400 text-xs ml-1"> events · resets on server restart</span>
+          <span className="text-slate-400 text-xs ml-1"> persisted webhook events</span>
         </p>
         <div className="flex items-center gap-2">
           <button onClick={() => setAutoRefresh(p => !p)}
@@ -798,20 +837,28 @@ function WebhookLogTab() {
         <div className="space-y-2">
           {events.map((ev, i) => {
             const isOpen = expanded === i;
-            const typeColor = TYPE_COLOR[ev.type] ?? 'bg-slate-50 text-slate-600 border-slate-200';
+            const label = ev.kind || ev.type || 'unknown';
+            const fallbackColor =
+              ev.kind?.includes('rejected') || ev.kind?.includes('error')
+                ? 'bg-rose-50 text-rose-600 border-rose-200'
+                : ev.kind?.includes('accepted') || ev.kind?.includes('completed')
+                  ? 'bg-green-100 text-green-700 border-green-200'
+                  : 'bg-slate-50 text-slate-600 border-slate-200';
+            const typeColor = TYPE_COLOR[ev.type || ''] ?? fallbackColor;
             return (
               <Card key={i} className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
                 <button onClick={() => setExpanded(isOpen ? null : i)}
                   className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors cursor-pointer">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0 ${typeColor}`}>{ev.type}</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0 ${typeColor}`}>{label}</span>
+                    {ev.intentId && <span className="text-[11px] text-slate-500 font-mono truncate max-w-[220px]">{ev.intentId}</span>}
                     <span className="text-xs text-slate-400 font-mono truncate">{ev.timestamp}</span>
                   </div>
                   {isOpen ? <ChevronUp size={14} className="text-slate-400 shrink-0" /> : <ChevronDown size={14} className="text-slate-400 shrink-0" />}
                 </button>
                 {isOpen && (
                   <CardContent className="px-5 pb-5 border-t border-slate-100 pt-4">
-                    <JsonBlock data={ev.payload} />
+                    <JsonBlock data={ev} />
                   </CardContent>
                 )}
               </Card>
