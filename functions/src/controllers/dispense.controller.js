@@ -1,6 +1,5 @@
-const dispenseBus = require("../lib/dispense-bus");
 const messageLog = require("../lib/message-log");
-const { sendDeviceOrder } = require("../lib/device-http");
+const { sendDeviceOrder, pollDeviceDispenseStatus } = require("../lib/device-http");
 const { db, now } = require("../lib/db");
 
 const latestCache = new Map();
@@ -24,67 +23,6 @@ function readOrderSlots(body) {
   return { slots };
 }
 
-function parseBooleanSlot(raw, key) {
-  if (raw === undefined) return false;
-  if (typeof raw === "boolean") return raw;
-  if (typeof raw === "number" && (raw === 0 || raw === 1)) return raw === 1;
-
-  if (typeof raw === "string") {
-    const value = raw.trim().toLowerCase();
-    if (value === "true" || value === "1") return true;
-    if (value === "false" || value === "0") return false;
-  }
-
-  throw new Error(`${key} must be a boolean value`);
-}
-
-function readConfirmationSlots(input) {
-  const slots = {};
-
-  for (let i = 1; i <= 6; i++) {
-    const key = `slot${i}`;
-    slots[key] = parseBooleanSlot(input[key], key);
-  }
-
-  return slots;
-}
-
-function createDispenseWait(machineId) {
-  const eventName = `dispense:${machineId}`;
-  let timer = null;
-  let settled = false;
-  let resolvePromise;
-
-  const promise = new Promise((resolve) => {
-    resolvePromise = resolve;
-  });
-
-  function finish(payload) {
-    if (settled) return;
-    settled = true;
-    if (timer) clearTimeout(timer);
-    dispenseBus.removeListener(eventName, onDispense);
-    resolvePromise(payload);
-  }
-
-  function onDispense(payload) {
-    finish(payload);
-  }
-
-  dispenseBus.once(eventName, onDispense);
-
-  return {
-    promise,
-    startTimer() {
-      if (settled || timer) return;
-      timer = setTimeout(() => finish(null), DISPENSE_TIMEOUT_MS);
-    },
-    cancel() {
-      finish(null);
-    },
-  };
-}
-
 async function sendOrder(req, res) {
   const { machineId } = req.params;
   const { slots, error } = readOrderSlots(req.body || {});
@@ -98,14 +36,11 @@ async function sendOrder(req, res) {
     return res.status(400).json({ error: "All slots are 0 - nothing to dispense." });
   }
 
-  const wait = createDispenseWait(machineId);
-
   try {
     const orderResult = await sendDeviceOrder(slots);
     messageLog.push("order", { value: orderResult.value, ...slots });
-    console.log(`HTTP order sent to machine ${machineId}: value=${orderResult.value}`);
+    console.log(`HTTP order sent to machine ${machineId}: ${orderResult.url}`);
   } catch (err) {
-    wait.cancel();
     console.error("HTTP order error:", err.message);
     return res.status(502).json({
       error: "Could not send order to the machine over HTTP. Try again shortly.",
@@ -113,24 +48,29 @@ async function sendOrder(req, res) {
     });
   }
 
-  wait.startTimer();
-  const confirmation = await wait.promise;
-
-  if (!confirmation) {
+  const confirmation = await pollDeviceDispenseStatus(slots, DISPENSE_TIMEOUT_MS);
+  if (!confirmation.completed) {
     return res.status(504).json({
-      error: `No dispense confirmation received from machine ${machineId} within ${DISPENSE_TIMEOUT_MS / 1000}s. The order was sent - check the machine manually.`,
+      error: `Ordered slots were not confirmed as dispensed within ${DISPENSE_TIMEOUT_MS / 1000}s. The order was sent - check the machine manually.`,
       ordered: slots,
+      latestStatus: confirmation.status,
     });
   }
+
+  messageLog.push("dispense", {
+    raw: confirmation.raw,
+    ...confirmation.status,
+  });
 
   const slotResults = {};
   let allOk = true;
 
   for (let i = 1; i <= 6; i++) {
     const key = `slot${i}`;
-    const ok = confirmation[key] === true;
-    slotResults[key] = { ordered: slots[key], dispensedOk: ok };
-    if (!ok) allOk = false;
+    const ordered = slots[key];
+    const ok = ordered > 0 ? confirmation.status[key] === true : true;
+    slotResults[key] = { ordered, dispensedOk: ok };
+    if (ordered > 0 && !ok) allOk = false;
   }
 
   const result = { ...slotResults, allOk, receivedAt: now() };
@@ -141,24 +81,6 @@ async function sendOrder(req, res) {
   );
 
   return res.json({ machineId, ordered: slots, dispenseConfirmation: slotResults, allOk });
-}
-
-function receiveDispenseConfirmation(req, res) {
-  const { machineId } = req.params;
-  const input = Object.keys(req.body || {}).length > 0 ? req.body : req.query;
-  let slots;
-
-  try {
-    slots = readConfirmationSlots(input || {});
-  } catch (err) {
-    return res.status(400).json({ error: err.message });
-  }
-
-  messageLog.push("dispense", slots);
-  console.log(`HTTP dispense confirmation received for machine ${machineId}:`, slots);
-  dispenseBus.emit(`dispense:${machineId}`, slots);
-
-  return res.json({ received: true, machineId, payload: slots });
 }
 
 async function getLatestDispense(req, res) {
@@ -176,4 +98,4 @@ async function getLatestDispense(req, res) {
   return res.json({ machineId, ...doc.data() });
 }
 
-module.exports = { sendOrder, receiveDispenseConfirmation, getLatestDispense };
+module.exports = { sendOrder, getLatestDispense };

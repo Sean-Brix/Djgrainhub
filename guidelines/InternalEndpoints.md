@@ -34,8 +34,7 @@ Base path for backend APIs: `/api`
 - `POST /api/machines/:machineId/events` — create event log entry (auth)
 
 ## Dispense (ESP32 integration)
-- `POST /api/machines/:machineId/order` - send HTTP dispense order (auth; waits for HTTP confirmation)
-- `POST /api/machines/:machineId/dispense` - receive device dispense confirmation (public; payload is `slot1`..`slot6` booleans, no `id`)
+- `POST /api/machines/:machineId/order` - send HTTP dispense order (auth; polls `vendo.php` until ordered slots are true)
 - `GET /api/machines/:machineId/dispense/latest` - last dispense result (auth)
 
 ## Sales

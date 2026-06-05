@@ -279,7 +279,7 @@ export function DevMqtt() {
       >
         <span className="font-bold">ESP32 contract - </span>
         Orders are sent over HTTP with <code className="bg-blue-100 px-1 rounded">value=slot1,...,slot6</code>.
-        Confirmations post <code className="bg-blue-100 px-1 rounded">slot1</code> through <code className="bg-blue-100 px-1 rounded">slot6</code> booleans with no <code className="bg-blue-100 px-1 rounded">id</code> in the payload.
+        Dispense status is polled from <code className="bg-blue-100 px-1 rounded">vendo.php</code> until each ordered slot becomes <code className="bg-blue-100 px-1 rounded">true</code>.
       </motion.div>
 
       {/* Tabs */}
@@ -380,7 +380,7 @@ export function DevMqtt() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-xs text-amber-700">
-                  This fires the slot-only dispense confirmation directly on the server bus - use it to test the kiosk dispensing flow without physical hardware.
+                  This legacy simulator only fires the internal development bus. Live kiosk orders now confirm by polling the device status endpoint.
                 </div>
 
                 <div>
