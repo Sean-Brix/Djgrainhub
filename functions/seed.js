@@ -1,15 +1,28 @@
 /**
  * Firestore Seed — DJ Grain Hub
  *
- * Populates Firestore with the same data that was previously in MySQL.
- * Uses the same document IDs so existing refs stay consistent.
+ * Populates Firestore with the demo dataset AND uploads every product image
+ * to Firebase Storage at products/<productId>/image — the exact path that
+ * GET /api/products/:id/image streams back to the app.
  *
- * Run from the functions/ directory:
- *   node seed.js
+ * Run:
+ *   npm run fill          (from server/)
+ *   node seed.js          (from functions/)
  *
- * Requires Application Default Credentials:
- *   gcloud auth application-default login
- * OR set GOOGLE_APPLICATION_CREDENTIALS to a service-account key file.
+ * Flags:
+ *   --skip-images   seed Firestore only, leave Storage untouched
+ *
+ * Credentials — pick ONE:
+ *   1. Service account key (easiest for local seeding):
+ *        Firebase Console -> Project settings -> Service accounts -> Generate new private key
+ *        Save the file as functions/serviceAccountKey.json (auto-detected, git-ignored),
+ *        or set GOOGLE_APPLICATION_CREDENTIALS to its absolute path.
+ *   2. gcloud Application Default Credentials:
+ *        gcloud auth application-default login
+ *        gcloud auth application-default set-quota-project dj-grain-hub
+ *   3. Emulators (no credentials needed):
+ *        set FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+ *        set FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199
  */
 
 const path = require("path");
@@ -18,6 +31,9 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 const admin = require("firebase-admin");
 const bcrypt = require("bcryptjs");
 const fs = require("fs");
+
+const SKIP_IMAGES = process.argv.includes("--skip-images");
+const USING_EMULATOR = Boolean(process.env.FIRESTORE_EMULATOR_HOST);
 
 function sanitizeBucketName(value) {
   if (typeof value !== "string") return null;
@@ -70,46 +86,191 @@ function resolveProjectId() {
   return null;
 }
 
+// ─── Credentials ──────────────────────────────────────────────────────
+
+const KEY_CANDIDATES = [
+  process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  path.join(__dirname, "serviceAccountKey.json"),
+  path.join(__dirname, "service-account.json"),
+  path.join(__dirname, "..", "serviceAccountKey.json"),
+  path.join(__dirname, "..", "service-account.json"),
+];
+
+function loadServiceAccount() {
+  const inline = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (typeof inline === "string" && inline.trim().startsWith("{")) {
+    try {
+      return { source: "FIREBASE_SERVICE_ACCOUNT env var", json: JSON.parse(inline) };
+    } catch {
+      console.warn("  ⚠ FIREBASE_SERVICE_ACCOUNT is not valid JSON — ignoring it.");
+    }
+  }
+
+  for (const candidate of KEY_CANDIDATES) {
+    if (!candidate) continue;
+    const keyPath = path.isAbsolute(candidate) ? candidate : path.join(process.cwd(), candidate);
+    if (!fs.existsSync(keyPath)) continue;
+    try {
+      return { source: keyPath, json: JSON.parse(fs.readFileSync(keyPath, "utf8")) };
+    } catch (err) {
+      console.warn(`  ⚠ Could not parse service account key at ${keyPath}: ${err.message}`);
+    }
+  }
+
+  return null;
+}
+
+const CREDENTIAL_HELP = [
+  "",
+  "🔑 No usable Google credentials were found, so nothing was written.",
+  "",
+  "Pick one of these, then run the seed again:",
+  "",
+  "  A) Service account key (recommended for local seeding)",
+  "     1. Firebase Console -> Project settings -> Service accounts",
+  "     2. Click \"Generate new private key\"",
+  "     3. Save the downloaded file as:  functions/serviceAccountKey.json",
+  "        (auto-detected and git-ignored — never commit it)",
+  "",
+  "  B) gcloud Application Default Credentials",
+  "       gcloud auth application-default login",
+  "       gcloud auth application-default set-quota-project dj-grain-hub",
+  "",
+  "  C) Local emulators (nothing real is touched)",
+  "       firebase emulators:start --only firestore,storage",
+  "       set FIRESTORE_EMULATOR_HOST=127.0.0.1:8080",
+  "       set FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199",
+  "",
+].join("\n");
+
+function isCredentialError(err) {
+  const message = String((err && err.message) || err);
+  return (
+    /Could not load the default credentials/i.test(message) ||
+    /Unable to detect a Project ?Id/i.test(message) ||
+    /invalid_grant|invalid_rapt|reauth|UNAUTHENTICATED/i.test(message) ||
+    (err && (err.code === 16 || err.code === 401))
+  );
+}
+
 const BUCKET_NAME =
-  sanitizeBucketName(process.env.FIREBASE_STORAGE_BUCKET) ||
-  "dj-grain-hub.firebasestorage.app";
+  sanitizeBucketName(process.env.FIREBASE_STORAGE_BUCKET) || "dj-grain-hub.firebasestorage.app";
 
 const PROJECT_ID = resolveProjectId();
+const SERVICE_ACCOUNT = USING_EMULATOR ? null : loadServiceAccount();
 
 const appOptions = { storageBucket: BUCKET_NAME };
 if (PROJECT_ID) appOptions.projectId = PROJECT_ID;
+if (SERVICE_ACCOUNT) {
+  appOptions.credential = admin.credential.cert(SERVICE_ACCOUNT.json);
+  if (!appOptions.projectId && SERVICE_ACCOUNT.json.project_id) {
+    appOptions.projectId = SERVICE_ACCOUNT.json.project_id;
+  }
+}
 
 admin.initializeApp(appOptions);
 const db = admin.firestore();
 
-let bucket;
-function getBucket() {
-  if (bucket !== undefined) return bucket;
-  try {
-    bucket = admin.storage().bucket(BUCKET_NAME);
-    return bucket;
-  } catch (err) {
-    console.warn(
-      `  ⚠ Firebase Storage not configured (bucket: ${BUCKET_NAME}). Skipping image uploads.`,
-      err && err.message ? err.message : String(err)
-    );
-    bucket = null;
-    return bucket;
+/** Fails fast with an actionable message instead of a raw google-auth stack trace. */
+async function preflightCredentials() {
+  if (USING_EMULATOR) {
+    console.log(`🧪 Emulator mode — Firestore at ${process.env.FIRESTORE_EMULATOR_HOST}`);
+    console.log(`📦 Project: ${appOptions.projectId || "(unresolved)"} · Bucket: ${BUCKET_NAME}\n`);
+    return;
   }
+
+  const authLabel = SERVICE_ACCOUNT
+    ? `service account (${SERVICE_ACCOUNT.source})`
+    : "application default credentials";
+  console.log(`🔐 Auth: ${authLabel}`);
+  console.log(`📦 Project: ${appOptions.projectId || "(unresolved)"} · Bucket: ${BUCKET_NAME}\n`);
+
+  try {
+    await db.collection("_seedPreflight").limit(1).get();
+  } catch (err) {
+    if (isCredentialError(err)) {
+      const wrapped = new Error("Missing or invalid Google credentials");
+      wrapped.help = CREDENTIAL_HELP;
+      throw wrapped;
+    }
+    throw err;
+  }
+}
+
+// ─── Product images ───────────────────────────────────────────────────
+
+let bucketPromise;
+/** Resolves the Storage bucket once, verifying it actually exists. */
+function getBucket() {
+  if (bucketPromise) return bucketPromise;
+
+  bucketPromise = (async () => {
+    try {
+      const storageBucket = admin.storage().bucket(BUCKET_NAME);
+      const emulated = USING_EMULATOR || Boolean(process.env.FIREBASE_STORAGE_EMULATOR_HOST);
+      if (!emulated) {
+        const [exists] = await storageBucket.exists();
+        if (!exists) {
+          console.warn(
+            `  ⚠ Storage bucket "${BUCKET_NAME}" does not exist. Enable Firebase Storage or set ` +
+              "FIREBASE_STORAGE_BUCKET. Product images will be skipped."
+          );
+          return null;
+        }
+      }
+      return storageBucket;
+    } catch (err) {
+      console.warn(
+        `  ⚠ Firebase Storage unavailable (bucket: ${BUCKET_NAME}). Product images will be skipped.`,
+        err && err.message ? err.message : String(err)
+      );
+      return null;
+    }
+  })();
+
+  return bucketPromise;
 }
 
 const IMAGE_DIR = path.join(__dirname, "..", "src", "assets");
 
+const IMAGE_EXTENSIONS = [
+  { ext: ".jpg", mimeType: "image/jpeg" },
+  { ext: ".jpeg", mimeType: "image/jpeg" },
+  { ext: ".png", mimeType: "image/png" },
+  { ext: ".webp", mimeType: "image/webp" },
+];
+
+/** Reads src/assets/<slotNumber>.<ext> for a slot, if any such file exists. */
 function getProductImage(slotNumber) {
-  try {
-    const imagePath = path.join(IMAGE_DIR, `${slotNumber}.jpg`);
-    if (fs.existsSync(imagePath)) {
-      return { buffer: fs.readFileSync(imagePath), mimeType: "image/jpeg" };
+  for (const { ext, mimeType } of IMAGE_EXTENSIONS) {
+    const imagePath = path.join(IMAGE_DIR, `${slotNumber}${ext}`);
+    try {
+      if (fs.existsSync(imagePath)) {
+        return { buffer: fs.readFileSync(imagePath), mimeType, imagePath };
+      }
+    } catch (err) {
+      console.warn(`  ⚠ Could not read ${imagePath}:`, err.message);
     }
-  } catch (err) {
-    console.warn(`  ⚠ Could not load image for slot ${slotNumber}:`, err.message);
   }
   return null;
+}
+
+/**
+ * Uploads one product image to products/<productId>/image and confirms the
+ * object really landed. Returns the stored mime type.
+ */
+async function uploadProductImage(bucket, productId, image) {
+  const file = bucket.file(`products/${productId}/image`);
+  await file.save(image.buffer, {
+    contentType: image.mimeType,
+    resumable: false,
+    metadata: { contentType: image.mimeType, cacheControl: "public, max-age=86400" },
+  });
+
+  const [exists] = await file.exists();
+  if (!exists) throw new Error("upload finished but the object is missing from the bucket");
+
+  return image.mimeType;
 }
 
 // ─── Source data ──────────────────────────────────────────────────────
@@ -193,6 +354,8 @@ const REPORTS = [
 async function main() {
   console.log("🌱 Starting Firestore seed...\n");
 
+  await preflightCredentials();
+
   // ── Users ──────────────────────────────────────────────────────────
   console.log("👤 Seeding users...");
   for (const u of USERS) {
@@ -220,33 +383,66 @@ async function main() {
     console.log(`  ✓ ${m.name}`);
   }
 
-  // ── Products ───────────────────────────────────────────────────────
+  // ── Products (+ images) ────────────────────────────────────────────
   console.log("\n🌾 Seeding products...");
+
+  const bucket = SKIP_IMAGES ? null : await getBucket();
+  const imageStats = { uploaded: 0, skipped: 0, failed: 0, missingSlots: new Set() };
+
   for (const p of PRODUCTS) {
     const ts = new Date().toISOString();
     const image = getProductImage(p.slotNumber);
+    let uploadedMimeType = null;
 
-    await db.collection("products").doc(p.id).set({
-      machineId: p.machineId, slotNumber: p.slotNumber, name: p.name,
-      price: p.price, cost: p.cost, weight: p.weight, stock: p.stock,
-      imageUrl: null, imageMimeType: image ? "image/jpeg" : null,
-      createdAt: ts, updatedAt: ts,
-    }, { merge: true });
-
-    // Upload image to Firebase Storage if available
-    if (image) {
-      const bucket = getBucket();
-      if (!bucket) continue;
+    if (!image) {
+      imageStats.missingSlots.add(p.slotNumber);
+    } else if (!bucket) {
+      imageStats.skipped++;
+    } else {
       try {
-        await bucket.file(`products/${p.id}/image`).save(image.buffer, {
-          metadata: { contentType: image.mimeType },
-        });
+        uploadedMimeType = await uploadProductImage(bucket, p.id, image);
+        imageStats.uploaded++;
       } catch (err) {
-        console.warn(`  ⚠ Could not upload image for ${p.id}:`, err.message);
+        imageStats.failed++;
+        console.warn(`  ⚠ Image upload failed for ${p.id}:`, err.message);
       }
     }
+
+    const data = {
+      machineId: p.machineId, slotNumber: p.slotNumber, name: p.name,
+      price: p.price, cost: p.cost, weight: p.weight, stock: p.stock,
+      createdAt: ts, updatedAt: ts,
+    };
+
+    // imageUrl stays null: the app reads the bytes back through
+    // GET /api/products/:id/image, which only serves them when imageMimeType
+    // is set. Claim the image only after a confirmed upload, so a failure
+    // never leaves a product pointing at a missing object.
+    if (uploadedMimeType) {
+      data.imageUrl = null;
+      data.imageMimeType = uploadedMimeType;
+    }
+
+    await db.collection("products").doc(p.id).set(data, { merge: true });
   }
+
   console.log(`  ✓ ${PRODUCTS.length} products across ${MACHINES.length} machines`);
+
+  if (SKIP_IMAGES) {
+    console.log("  ↷ Images skipped (--skip-images)");
+  } else {
+    console.log(`  🖼 Images uploaded: ${imageStats.uploaded}/${PRODUCTS.length}`);
+    if (imageStats.skipped) {
+      console.warn(`  ⚠ ${imageStats.skipped} image(s) skipped — Storage bucket unavailable`);
+    }
+    if (imageStats.failed) {
+      console.warn(`  ⚠ ${imageStats.failed} image upload(s) failed`);
+    }
+  }
+  if (imageStats.missingSlots.size) {
+    const slots = [...imageStats.missingSlots].sort((a, b) => a - b).join(", ");
+    console.warn(`  ⚠ No source image for slot(s) ${slots} — expected <slot>.jpg in ${IMAGE_DIR}`);
+  }
 
   // ── Alerts ─────────────────────────────────────────────────────────
   console.log("\n🚨 Seeding alerts...");
@@ -281,16 +477,30 @@ async function main() {
   }
   console.log(`  ✓ Preferences set for ${USERS.length} users`);
 
-  console.log("\n✅ Firestore seed complete!");
+  const imagesIncomplete = !SKIP_IMAGES && (imageStats.failed > 0 || imageStats.skipped > 0);
+
+  if (imagesIncomplete) {
+    console.log("\n⚠️  Firestore seed finished, but some product images were not uploaded.");
+  } else {
+    console.log("\n✅ Firestore seed complete!");
+  }
+
   console.log("\n📝 Login credentials:");
   for (const u of USERS) {
     console.log(`  ${u.username.padEnd(12)} → ${u.password}  (${u.accessRole})`);
   }
+
+  return imagesIncomplete ? 1 : 0;
 }
 
 main()
+  .then((exitCode) => process.exit(exitCode || 0))
   .catch((err) => {
-    console.error("❌ Seed failed:", err);
+    console.error(`❌ Seed failed: ${(err && err.message) || err}`);
+    if (err && err.help) {
+      console.error(err.help);
+    } else if (err && err.stack) {
+      console.error(err.stack);
+    }
     process.exit(1);
-  })
-  .finally(() => process.exit(0));
+  });

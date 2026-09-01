@@ -2,3 +2,5 @@ node_modules/
 *.local
 .env
 .env.*
+serviceAccountKey.json
+service-account.json
