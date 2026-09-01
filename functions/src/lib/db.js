@@ -1,11 +1,18 @@
 const admin = require("firebase-admin");
 
+// Default bucket for this project. Cloud Functions supplies storageBucket via
+// FIREBASE_CONFIG at runtime, but the deploy-time source analysis does not, so
+// admin.storage().bucket() would throw while the CLI loads this module.
+// Same env var + fallback used by seed.js.
+const BUCKET_NAME =
+  process.env.FIREBASE_STORAGE_BUCKET || "dj-grain-hub.firebasestorage.app";
+
 if (!admin.apps.length) {
-  admin.initializeApp();
+  admin.initializeApp({ storageBucket: BUCKET_NAME });
 }
 
 const db = admin.firestore();
-const bucket = admin.storage().bucket();
+const bucket = admin.storage().bucket(BUCKET_NAME);
 
 /**
  * Convert a Firestore DocumentSnapshot to a plain JS object.

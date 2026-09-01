@@ -36,9 +36,9 @@ services:
 
       # Device HTTP order endpoint
       - key: DEVICE_ORDER_URL
-        value: https://phsolutions.tech/iotsystem/update.php
+        value: https://ardevcore.site/iotsystem/update.php
       - key: DEVICE_STATUS_URL
-        value: https://phsolutions.tech/iotsystem/vendo.php
+        value: https://ardevcore.site/iotsystem/vendo.php
 
       # PayMongo
       - key: PAYMONGO_SECRET_KEY

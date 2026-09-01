@@ -1,8 +1,8 @@
 const http = require("http");
 const https = require("https");
 
-const DEFAULT_DEVICE_ORDER_URL = "https://phsolutions.tech/iotsystem/update.php";
-const DEFAULT_DEVICE_STATUS_URL = "https://phsolutions.tech/iotsystem/vendo.php";
+const DEFAULT_DEVICE_ORDER_URL = "https://ardevcore.site/iotsystem/update.php";
+const DEFAULT_DEVICE_STATUS_URL = "https://ardevcore.site/iotsystem/vendo.php";
 const REQUEST_TIMEOUT_MS = 15_000;
 const DISPENSE_POLL_INTERVAL_MS = 2_000;
 
